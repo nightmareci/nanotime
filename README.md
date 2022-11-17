@@ -14,4 +14,4 @@ int main() {
 }
 ```
 
-A simple test program, `test_nanosleep`, is provided, that can be built using CMake.
+A simple test program, `test_nanosleep`, is provided, that can be built using CMake. The test program requires C11, but `nanosleep.h` might only require C89.
