@@ -13,3 +13,5 @@ int main() {
   return 0;
 }
 ```
+
+A simple test program, `test_nanosleep`, is provided, that can be built using CMake.
