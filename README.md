@@ -1,5 +1,5 @@
 # nanosleep
-A single-header library that provides POSIX nanosleep for POSIX or non-POSIX platforms.
+A single-header library that provides POSIX nanosleep for POSIX and non-POSIX platforms.
 
 Just include the header, then use nanosleep per the POSIX documentation:
 
