@@ -18,7 +18,7 @@ int main(int argc, char** argv) {
 	struct timespec end;
 
 	(void)timespec_get(&start, TIME_UTC);
-	(void)nanosleep(&req, &rem);
+	const int status = nanosleep(&req, &rem);
 	(void)timespec_get(&end, TIME_UTC);
 
 	const double elapsed_seconds =
@@ -27,7 +27,7 @@ int main(int argc, char** argv) {
 
 	printf("Requested time to suspend (seconds): %.9lf\n", req_seconds);
 	printf("Suspended time (seconds): %.9lf\n", elapsed_seconds);
-	if (errno == EINTR) {
+	if (status == -1 && errno == EINTR) {
 		const double rem_seconds =
 			(double)rem.tv_sec +
 			(double)rem.tv_nsec / 1000000000.0;
