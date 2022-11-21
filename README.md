@@ -1,9 +1,10 @@
 # nanosleep
 A single-header library that provides POSIX nanosleep for POSIX and non-POSIX platforms, such as Windows.
 
-Just include the header, then use nanosleep per the [POSIX documentation](https://pubs.opengroup.org/onlinepubs/9699919799/functions/nanosleep.html):
+Define `NANOSLEEP_IMPLEMENTATION` before one `#include` of `nanosleep.h` for the implementation, then `#include` the `nanosleep.h` header without that definition in other sources using `nanosleep()`. Refer to the [POSIX documentation](https://pubs.opengroup.org/onlinepubs/9699919799/functions/nanosleep.html) for all the details about `nanosleep()`:
 
 ```c
+#define NANOSLEEP_IMPLEMENTATION
 #include "nanosleep.h"
 
 int main() {

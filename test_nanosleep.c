@@ -1,5 +1,5 @@
+#define NANOSLEEP_IMPLEMENTATION
 #include "nanosleep.h"
-#include <time.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
@@ -9,6 +9,8 @@ int main(int argc, char** argv) {
 	if (argc <= 1 || sscanf_s(argv[1], "%lf", &req_seconds) != 1 || req_seconds < 0.0) {
 		goto usage;
 	}
+
+	printf("Requested time to suspend (seconds): %.9lf\n", req_seconds);
 
 	struct timespec req = {
 		(time_t)req_seconds, (long)(fmod(req_seconds, 1.0) * 1000000000.0)
@@ -25,7 +27,6 @@ int main(int argc, char** argv) {
 		(double)(end.tv_sec  - start.tv_sec ) +
 		(double)(end.tv_nsec - start.tv_nsec) / 1000000000.0;
 
-	printf("Requested time to suspend (seconds): %.9lf\n", req_seconds);
 	printf("Suspended time (seconds): %.9lf\n", elapsed_seconds);
 	if (status == -1 && errno == EINTR) {
 		const double rem_seconds =

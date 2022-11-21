@@ -55,17 +55,22 @@
  * IN THE SOFTWARE.
  */
 
+#include <time.h>
+
 #ifdef _WIN32
+
+#ifdef NANOSLEEP_IMPLEMENTATION
 
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
-#include <time.h>
 
 /* Attempt to suspend the current thread for the amount of time requested in "req". Refer to POSIX documentation for more details. */
-static inline int nanosleep(const struct timespec* req, struct timespec* rem) {
+int nanosleep(const struct timespec* req, struct timespec* rem) {
 	static HANDLE timer = NULL;
+	static LARGE_INTEGER freq = { 0 };
+	static float conv;
 	LARGE_INTEGER
-		start, end, freq,
+		start, end,
 		elapsed,
 		req_li, rem_li;
 
@@ -121,9 +126,17 @@ static inline int nanosleep(const struct timespec* req, struct timespec* rem) {
 				if (rem != NULL) {
 					rem_li.QuadPart = -req_li.QuadPart - elapsed.QuadPart;
 
-					QueryPerformanceFrequency(&freq);
+					if (freq.QuadPart == 0) {
+						/*
+						 * Microsoft's Windows documentation says the frequency
+						 * value is fixed at system startup, so it can be
+						 * cached after getting it once.
+						 */
+						QueryPerformanceFrequency(&freq);
+						conv = 1000000000.0f / freq.QuadPart;
+					}
 					rem->tv_sec = rem_li.QuadPart / freq.QuadPart;
-					rem->tv_nsec = ((rem_li.QuadPart % freq.QuadPart) % (1000000000LL / 100LL)) * 100L;
+					rem->tv_nsec = (long)((rem_li.QuadPart % freq.QuadPart) * conv);
 				}
 				return -1;
 			}
@@ -139,8 +152,10 @@ static inline int nanosleep(const struct timespec* req, struct timespec* rem) {
 
 #else
 
-/* Maybe time.h has it. POSIX-compliant platforms have it. */
-#include <time.h>
+/* Attempt to suspend the current thread for the amount of time requested in "req". Refer to POSIX documentation for more details. */
+int nanosleep(const struct timespec* req, struct timespec* rem);
+
+#endif
 
 #endif
 
