@@ -1,8 +1,70 @@
+# You can choose this license, if possible in your jurisdiction:
+#
+# Unlicense
+#
+# This is free and unencumbered software released into the public domain.
+#
+# Anyone is free to copy, modify, publish, use, compile, sell, or distribute
+# this software, either in source code form or as a compiled binary, for any
+# purpose, commercial or non-commercial, and by any means.
+#
+# In jurisdictions that recognize copyright laws, the author or authors of this
+# software dedicate any and all copyright interest in the software to the
+# public domain. We make this dedication for the benefit of the public at large
+# and to the detriment of our heirs and successors. We intend this dedication
+# to be an overt act of relinquishment in perpetuity of all present and future
+# rights to this software under copyright law.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
+# AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+# ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+# WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+#
+# For more information, please refer to <http://unlicense.org/>
+#
+#
+# Alternative license choice, if works can't be directly submitted to the
+# public domain in your jurisdiction:
+#
+# The MIT License (MIT)
+#
+# Copyright © 2022 Brandon McGriff <nightmareci@gmail.com>
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the “Software”), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
 cmake_minimum_required(VERSION 3.0)
+
+project(test_nanosleep LANGUAGES C CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED TRUE)
 
-project(test_nanosleep LANGUAGES C)
+add_executable(test_nanosleep_cpp test_nanosleep.cpp)
 
-add_executable(test_nanosleep test_nanosleep.c)
+add_executable(test_nanosleep_c test_nanosleep.c)
+
+find_library(MATH_LIBRARY m)
+if(NOT "${MATH_LIBRARY}" STREQUAL MATH_LIBRARY-NOTFOUND)
+	target_link_libraries(test_nanosleep_c "${MATH_LIBRARY}")
+endif()

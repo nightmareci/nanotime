@@ -1,5 +1,5 @@
-#ifndef _include_guard_nanosleep_
-#define _include_guard_nanosleep_
+#ifndef _include_guard_portable_nanosleep_
+#define _include_guard_portable_nanosleep_
 
 /*
  * You can choose this license, if possible in your jurisdiction:
@@ -55,23 +55,26 @@
  * IN THE SOFTWARE.
  */
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <time.h>
 
-#ifdef _WIN32
+#ifdef _MSC_VER
 
-#ifdef NANOSLEEP_IMPLEMENTATION
+#ifdef PORTABLE_NANOSLEEP_IMPLEMENTATION
 
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 
-/* Attempt to suspend the current thread for the amount of time requested in "req". Refer to POSIX documentation for more details. */
+/* Attempt to suspend the current thread for the amount of time requested in "req". Refer to POSIX nanosleep documentation for more details. */
 int nanosleep(const struct timespec* req, struct timespec* rem) {
 	static HANDLE timer = NULL;
 	static LARGE_INTEGER freq = { 0 };
 	static float conv;
 	LARGE_INTEGER
-		start, end,
-		elapsed,
+		start, end, elapsed,
 		req_li, rem_li;
 
 	/*
@@ -152,11 +155,15 @@ int nanosleep(const struct timespec* req, struct timespec* rem) {
 
 #else
 
-/* Attempt to suspend the current thread for the amount of time requested in "req". Refer to POSIX documentation for more details. */
+/* Attempt to suspend the current thread for the amount of time requested in "req". Refer to POSIX nanosleep documentation for more details. */
 int nanosleep(const struct timespec* req, struct timespec* rem);
 
 #endif
 
 #endif
 
-#endif /* _include_guard_nanosleep_ */
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* _include_guard_portable_nanosleep_ */
