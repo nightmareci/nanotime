@@ -58,22 +58,20 @@
 #include <math.h>
 #include <errno.h>
 
-#define PORTABLE_NANOSLEEP_IMPLEMENTATION
-#include "portable_nanosleep.h"
+#define NANOTIME_IMPLEMENTATION
+#include "nanotime.h"
 
 int main(int argc, char** argv) {
 	double req_seconds = -1.0;
-	if (
-		argc <= 1 ||
-		#ifdef _MSC_VER
-		// MSVC complains if you use sscanf, but doesn't complain if you use sscanf_s.
-		sscanf_s
-		#else
-		sscanf
-		#endif
-			(argv[1], "%lf", &req_seconds) != 1 ||
-		req_seconds < 0.0
-	) {
+	struct timespec req;
+	struct timespec rem = { 0 };
+	struct timespec start;
+	struct timespec end;
+	int status;
+	double elapsed_seconds;
+	double rem_seconds;
+
+	if (argc <= 1 || sscanf(argv[1], "%lf", &req_seconds) != 1 || req_seconds < 0.0) {
 		fprintf(stderr, "Usage: test_nanosleep [seconds]\n");
 		fprintf(stderr, "[seconds] must be greater than or equal to 0.0.\n");
 		fprintf(stderr, "Example, testing 1 millisecond suspension: test_nanosleep 0.001\n");
@@ -82,24 +80,20 @@ int main(int argc, char** argv) {
 
 	printf("Requested time to suspend (seconds): %.9lf\n", req_seconds);
 
-	struct timespec req = {
-		(time_t)req_seconds, (long)(fmod(req_seconds, 1.0) * 1000000000.0)
-	};
-	struct timespec rem = { 0 };
-	struct timespec start;
-	struct timespec end;
+	req.tv_sec = (time_t)req_seconds;
+	req.tv_nsec = (long)(fmod(req_seconds, 1.0) * 1000000000.0);
 
 	(void)timespec_get(&start, TIME_UTC);
-	const int status = nanosleep(&req, &rem);
+	status = nanosleep(&req, &rem);
 	(void)timespec_get(&end, TIME_UTC);
 
-	const double elapsed_seconds =
+	elapsed_seconds =
 		(double)(end.tv_sec  - start.tv_sec ) +
 		(double)(end.tv_nsec - start.tv_nsec) / 1000000000.0;
 
 	printf("Suspended time (seconds): %.9lf\n", elapsed_seconds);
 	if (status == -1 && errno == EINTR) {
-		const double rem_seconds =
+		rem_seconds =
 			(double)rem.tv_sec +
 			(double)rem.tv_nsec / 1000000000.0;
 		printf("Remaining suspension time (seconds): %.9lf\n", rem_seconds);

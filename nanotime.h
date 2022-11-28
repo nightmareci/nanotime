@@ -1,5 +1,5 @@
-#ifndef _include_guard_portable_nanosleep_
-#define _include_guard_portable_nanosleep_
+#ifndef _include_guard_nanotime_
+#define _include_guard_nanotime_
 
 /*
  * You can choose this license, if possible in your jurisdiction:
@@ -63,7 +63,7 @@ extern "C" {
 
 #ifdef _MSC_VER
 
-#ifdef PORTABLE_NANOSLEEP_IMPLEMENTATION
+#ifdef NANOTIME_IMPLEMENTATION
 
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
@@ -72,10 +72,9 @@ extern "C" {
 int nanosleep(const struct timespec* req, struct timespec* rem) {
 	static HANDLE timer = NULL;
 	static LARGE_INTEGER freq = { 0 };
-	static float conv;
 	LARGE_INTEGER
 		start, end, elapsed,
-		req_li, rem_li;
+		req_li, rem_li, rem_subsec;
 
 	/*
 	 * Retrieval of the start time is placed here, so the elapsed time is
@@ -106,7 +105,22 @@ int nanosleep(const struct timespec* req, struct timespec* rem) {
 			return 0;
 		}
 		else if (req->tv_sec >= 0 && req->tv_nsec <= 999999999L) {
-			if (timer == NULL && (timer = CreateWaitableTimer(NULL, TRUE, NULL)) == NULL) {
+			if (
+				timer == NULL &&
+#ifdef CREATE_WAITABLE_TIMER_HIGH_RESOLUTION
+				/*
+				 * Requesting a high resolution timer can make quite the
+				 * difference, so always request high resolution if available.
+				 * It's available in Windows 10 1803 and above. This
+				 * arrangement of building it if the build system supports it
+				 * will allow the executable to use high resolution if
+				 * available on a user's system, but revert to low resolution
+				 * if the user's system doesn't support high resolution.
+				 */
+				(timer = CreateWaitableTimerEx(NULL, NULL, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS)) == NULL &&
+#endif
+				(timer = CreateWaitableTimer(NULL, TRUE, NULL)) == NULL
+			) {
 				errno = EFAULT;
 				return -1;
 			}
@@ -136,10 +150,15 @@ int nanosleep(const struct timespec* req, struct timespec* rem) {
 						 * cached after getting it once.
 						 */
 						QueryPerformanceFrequency(&freq);
-						conv = 1000000000.0f / freq.QuadPart;
 					}
-					rem->tv_sec = rem_li.QuadPart / freq.QuadPart;
-					rem->tv_nsec = (long)((rem_li.QuadPart % freq.QuadPart) * conv);
+					rem->tv_sec = (time_t)(rem_li.QuadPart / freq.QuadPart);
+					rem_subsec.QuadPart = rem_li.QuadPart % freq.QuadPart;
+					if (freq.QuadPart < 1000000000LL) {
+						rem->tv_nsec = (long)(rem_subsec.QuadPart * (1000000000LL / freq.QuadPart));
+					}
+					else {
+						rem->tv_nsec = (long)(rem_subsec.QuadPart / (freq.QuadPart / 1000000000LL));
+					}
 				}
 				return -1;
 			}
@@ -166,4 +185,4 @@ int nanosleep(const struct timespec* req, struct timespec* rem);
 }
 #endif
 
-#endif /* _include_guard_portable_nanosleep_ */
+#endif /* _include_guard_nanotime_ */
