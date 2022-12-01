@@ -54,17 +54,13 @@ cmake_minimum_required(VERSION 3.0)
 
 project(test_nanotime LANGUAGES C CXX)
 
-set(CMAKE_CXX_STANDARD 17)
+# TODO: Make C++ and C standards settable with CMake options.
+
+set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED TRUE)
 
 add_executable(test_nanotime_cpp test_nanotime.cpp)
-
 add_executable(test_nanotime_c test_nanotime.c)
-
-find_library(MATH_LIBRARY m)
-if(NOT "${MATH_LIBRARY}" STREQUAL MATH_LIBRARY-NOTFOUND)
-	target_link_libraries(test_nanotime_c "${MATH_LIBRARY}")
-endif()
