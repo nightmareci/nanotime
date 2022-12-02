@@ -62,5 +62,17 @@ set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED TRUE)
 
-add_executable(test_nanotime_cpp test_nanotime.cpp)
-add_executable(test_nanotime_c test_nanotime.c)
+find_package(SDL2 REQUIRED)
+
+add_executable(test_nanotime_sleep_cpp test_nanotime_sleep.cpp)
+add_executable(test_nanotime_sleep_c test_nanotime_sleep.c)
+
+add_executable(test_nanotime_step test_nanotime_step.c)
+target_link_libraries(test_nanotime_step
+	SDL2::SDL2
+	SDL2::SDL2main
+)
+find_library(MATH_LIBRARY m)
+if(NOT "${MATH_LIBRARY}" STREQUAL MATH_LIBRARY-NOTFOUND)
+	target_link_libraries(test_nanotime_step "${MATH_LIBRARY}")
+endif()
