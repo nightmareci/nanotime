@@ -64,38 +64,6 @@
 #endif
 
 #ifdef __cplusplus
-#ifdef NANOTIME_IMPLEMENTATION
-#if defined(__cplusplus) && (__cplusplus >= 201103L)
-
-#ifndef NANOTIME_NOW_IMPLEMENTED
-#include <cstdint>
-#include <chrono>
-extern "C" uint64_t nanotime_now() {
-	return static_cast<uint64_t>(
-		std::chrono::time_point_cast<std::chrono::nanoseconds>(
-			std::chrono::high_resolution_clock::now()
-		).time_since_epoch().count()
-	);
-}
-#define NANOTIME_NOW_IMPLEMENTED
-#endif
-
-#ifndef NANOTIME_SLEEP_IMPLEMENTED
-#include <cstdint>
-#include <thread>
-#include <exception>
-extern "C" void nanotime_sleep(const uint64_t nsec_count) {
-	try {
-		std::this_thread::sleep_for(std::chrono::nanoseconds(nsec_count));
-	}
-	catch (std::exception e) {
-	}
-}
-#define NANOTIME_SLEEP_IMPLEMENTED
-#endif
-
-#endif
-#endif
 extern "C" {
 #endif
 
@@ -117,36 +85,10 @@ void nanotime_sleep(const uint64_t nsec_count);
 
 #ifdef NANOTIME_IMPLEMENTATION
 
-#ifndef NANOTIME_NOW_IMPLEMENTED
-#if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
-#include <time.h>
-uint64_t nanotime_now() {
-	struct timespec now;
-	const int status = timespec_get(&now, TIME_UTC);
-	assert(status == TIME_UTC);
-	return (uint64_t)now.tv_sec * (uint64_t)NSEC_PER_SEC + (uint64_t)now.tv_nsec;
-}
-#define NANOTIME_NOW_IMPLEMENTED
-#endif
-#endif
-
-#ifndef NANOTIME_SLEEP_IMPLEMENTED
-#if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L) && !defined(__STDC_NO_THREADS__)
-#include <threads.h>
-void nanotime_sleep(const uint64_t nsec_count) {
-	const struct timespec req = {
-		.tv_sec = (time_t)(nsec_count / NSEC_PER_SEC),
-		.tv_nsec = (long)(nsec_count % NSEC_PER_SEC)
-	};
-	const int status = thrd_sleep(&req, NULL);
-	assert(status == 0 || status == -1);
-}
-#define NANOTIME_SLEEP_IMPLEMENTED
-#endif
-#endif
-
 /*
- * Non-portable, platform-specific implementations are provided below.
+ * Non-portable, platform-specific implementations are first. If none of them
+ * match the current platform, the standard C/C++ versions are used as a last
+ * resort.
  */
 
 #ifdef _MSC_VER
@@ -243,7 +185,7 @@ uint64_t nanotime_now() {
 	mach_timespec_t now;
 	host_get_clock_service(mach_host_self(), CALENDAR_CLOCK, &clock_serv);
 	clock_get_time(clock_serv, &now);
-	mach_port_deallocate(mach_task_self(), cclock);
+	mach_port_deallocate(mach_task_self(), clock_serv);
 	return (uint64_t)now.tv_sec * (uint64_t)NSEC_PER_SEC + (uint64_t)now.tv_nsec;
 }
 #define NANOTIME_NOW_IMPLEMENTED
@@ -263,16 +205,80 @@ void nanotime_sleep(const uint64_t nsec_count) {
 #endif
 
 #ifndef NANOTIME_NOW_IMPLEMENTED
-#error "Failed to implement nanotime_now (try using C11 with C11 threads support or C++11)."
+#if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
+#include <time.h>
+uint64_t nanotime_now() {
+	struct timespec now;
+	const int status = timespec_get(&now, TIME_UTC);
+	assert(status == TIME_UTC);
+	return (uint64_t)now.tv_sec * (uint64_t)NSEC_PER_SEC + (uint64_t)now.tv_nsec;
+}
+#define NANOTIME_NOW_IMPLEMENTED
 #endif
+#endif
+
 #ifndef NANOTIME_SLEEP_IMPLEMENTED
-#error "Failed to implement nanotime_sleep (try using C11 with C11 threads support or C++11)."
+#if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L) && !defined(__STDC_NO_THREADS__)
+#include <threads.h>
+void nanotime_sleep(const uint64_t nsec_count) {
+	const struct timespec req = {
+		.tv_sec = (time_t)(nsec_count / NSEC_PER_SEC),
+		.tv_nsec = (long)(nsec_count % NSEC_PER_SEC)
+	};
+	const int status = thrd_sleep(&req, NULL);
+	assert(status == 0 || status == -1);
+}
+#define NANOTIME_SLEEP_IMPLEMENTED
+#endif
 #endif
 
 #endif
 
 #ifdef __cplusplus
 }
+#endif
+
+#ifdef __cplusplus
+#ifdef NANOTIME_IMPLEMENTATION
+#if defined(__cplusplus) && (__cplusplus >= 201103L)
+
+#ifndef NANOTIME_NOW_IMPLEMENTED
+#include <cstdint>
+#include <chrono>
+extern "C" uint64_t nanotime_now() {
+	return static_cast<uint64_t>(
+		std::chrono::time_point_cast<std::chrono::nanoseconds>(
+			std::chrono::high_resolution_clock::now()
+		).time_since_epoch().count()
+	);
+}
+#define NANOTIME_NOW_IMPLEMENTED
+#endif
+
+#ifndef NANOTIME_SLEEP_IMPLEMENTED
+#include <cstdint>
+#include <thread>
+#include <exception>
+extern "C" void nanotime_sleep(const uint64_t nsec_count) {
+	try {
+		std::this_thread::sleep_for(std::chrono::nanoseconds(nsec_count));
+	}
+	catch (std::exception e) {
+	}
+}
+#define NANOTIME_SLEEP_IMPLEMENTED
+#endif
+
+#endif
+#endif
+#endif
+
+#ifndef NANOTIME_NOW_IMPLEMENTED
+#error "Failed to implement nanotime_now (try using C11 with C11 threads support or C++11)."
+#endif
+
+#ifndef NANOTIME_SLEEP_IMPLEMENTED
+#error "Failed to implement nanotime_sleep (try using C11 with C11 threads support or C++11)."
 #endif
 
 #endif /* _include_guard_nanotime_ */
