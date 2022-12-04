@@ -73,8 +73,6 @@ int update_logic(void* data) {
 
 	nanotime_step_data stepper;
 	nanotime_step_init(&stepper, (uint64_t)(NSEC_PER_SEC / LOGIC_RATE), nanotime_now, nanotime_sleep);
-	nanotime_step_start(&stepper);
-
 	while (!SDL_AtomicGet(&quit_now)) {
 		const uint64_t last_sleep_point = stepper.sleep_point;
 		nanotime_step(&stepper);
@@ -82,6 +80,7 @@ int update_logic(void* data) {
 		const uint64_t update_measured = stepper.sleep_point - last_sleep_point;
 		num_updates++;
 		update_sleep_total += update_measured;
+		#if 1
 		printf("%.9lfs FPS current, %.9lf FPS average, %.9lf seconds off, accumulated %.9lf seconds\n",
 			(double)NSEC_PER_SEC / update_measured,
 			(double)NSEC_PER_SEC / (update_sleep_total / num_updates),
@@ -89,6 +88,7 @@ int update_logic(void* data) {
 			stepper.accumulator / (double)NSEC_PER_SEC
 		);
 		fflush(stdout);
+		#endif
 	}
 
 	return 0;
@@ -123,7 +123,6 @@ int main(int argc, char** argv) {
 
 	nanotime_step_data stepper;
 	nanotime_step_init(&stepper, (uint64_t)(NSEC_PER_SEC / FRAME_RATE), nanotime_now, nanotime_sleep);
-	nanotime_step_start(&stepper);
 
 	// The SDL2 documentation says that for maximally-portable code, video
 	// and events should be handled only in the main thread.
