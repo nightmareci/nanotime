@@ -45,8 +45,6 @@ An implementation of the [fixed timestep](https://www.gafferongames.com/post/fix
 int main() {
     nanotime_step_data stepper;
     nanotime_step_init(&stepper, NSEC_PER_SEC / 1000, nanotime_now, nanotime_sleep);
-
-    nanotime_step_start(&stepper);
     for (int i = 0; i < 1000; i++) {
         const uint64_t start = stepper.sleep_point;
         nanotime_step(&stepper);
