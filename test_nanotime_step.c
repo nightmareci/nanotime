@@ -143,8 +143,12 @@ int main(int argc, char** argv) {
 	nanotime_step_init(&stepper, (uint64_t)(NANOTIME_NSEC_PER_SEC / FRAME_RATE), nanotime_now, nanotime_sleep);
 
 	// The SDL2 documentation says that for maximally-portable code, video
-	// and events should be handled only in the main thread.
+	// and events should be handled only in the main thread. Additionally,
+	// stdio should only be used in the main thread, as it's not guaranteed
+	// that using stdio in a non-main thread is safe.
 	while (true) {
+		int status;
+
 		// This animation code is time-based, so it's independent of
 		// the frame rate.
 		const Uint8 shade = (Uint8)(((sin(two_pi * ((double)(nanotime_now() % NANOTIME_NSEC_PER_SEC) / NANOTIME_NSEC_PER_SEC)) + 1.0) / 2.0) * 255.0);
@@ -160,9 +164,11 @@ int main(int argc, char** argv) {
 			SDL_Quit();
 			return EXIT_FAILURE;
 		}
-		SDL_RenderPresent(renderer);
 
-		if (SDL_TryLockMutex(logic_mutex) == 0) {
+		// Just pretend this is rendering to the screen; it's still in
+		// the right place if it were render code.
+		status = SDL_TryLockMutex(logic_mutex);
+		if (status == 0) {
 			if (logic_data[1].num_updates > UINT64_C(0)) {
 				printf("%.9lfs FPS current, %.9lf FPS average, %.9lf seconds off, accumulated %.9lf seconds\n",
 					(double)NANOTIME_NSEC_PER_SEC / logic_data[1].update_measured,
@@ -172,17 +178,45 @@ int main(int argc, char** argv) {
 				);
 				fflush(stdout);
 			}
-			SDL_UnlockMutex(logic_mutex);
+			if (SDL_UnlockMutex(logic_mutex) == -1) {
+				SDL_AtomicSet(&quit_now, 1);
+				SDL_WaitThread(logic_thread, NULL);
+				SDL_DestroyMutex(logic_mutex);
+				SDL_DestroyRenderer(renderer);
+				SDL_DestroyWindow(window);
+				SDL_Quit();
+				return EXIT_FAILURE;
+			}
 		}
+		else if (status == -1) {
+			SDL_AtomicSet(&quit_now, 1);
+			SDL_WaitThread(logic_thread, NULL);
+			SDL_DestroyMutex(logic_mutex);
+			SDL_DestroyRenderer(renderer);
+			SDL_DestroyWindow(window);
+			SDL_Quit();
+			return EXIT_FAILURE;
+		}
+
+		SDL_RenderPresent(renderer);
 
 		// The timestep should be here, followed by input, as the
 		// player should be given as much time as possible to react to
 		// screen updates.
 		nanotime_step(&stepper);
 		SDL_PumpEvents();
-		if (SDL_PeepEvents(NULL, 0, SDL_PEEKEVENT, SDL_QUIT, SDL_QUIT) > 0) {
+		if ((status = SDL_PeepEvents(NULL, 0, SDL_PEEKEVENT, SDL_QUIT, SDL_QUIT)) > 0) {
 			SDL_AtomicSet(&quit_now, 1);
 			break;
+		}
+		else if (status < 0) {
+			SDL_AtomicSet(&quit_now, 1);
+			SDL_WaitThread(logic_thread, NULL);
+			SDL_DestroyMutex(logic_mutex);
+			SDL_DestroyRenderer(renderer);
+			SDL_DestroyWindow(window);
+			SDL_Quit();
+			return EXIT_FAILURE;
 		}
 	}
 

@@ -343,11 +343,9 @@ void nanotime_step(nanotime_step_data* const stepper) {
 		const uint64_t shift = 4;
 
 		#ifdef __APPLE__
-		// macOS seems to need a different algorithm to get lower
-		// CPU/power usage, which is provided here.
-
 		// Start with a big sleep. This helps reduce CPU/power use on
-		// macOS vs. many shorter sleeps.
+		// macOS vs. many shorter sleeps. Shorter sleeps are still done
+		// below, but this reduces the number of shorter sleeps.
 		if (current_sleep_duration > stepper->overhead_duration) {
 			const uint64_t start_sleep = stepper->now();
 			stepper->sleep(current_sleep_duration - stepper->overhead_duration);
@@ -360,41 +358,21 @@ void nanotime_step(nanotime_step_data* const stepper) {
 			stepper->overhead_duration = UINT64_C(0);
 		}
 
-		// Next, do short sleeps, making a best-attempt at stopping
-		// before the deadline has been hit.
 		if ((current_sleep_duration = stepper->now()) < end) {
 			current_sleep_duration = end - current_sleep_duration;
-			for (current_sleep_duration >>= shift; current_sleep_duration > stepper->zero_sleep_duration; current_sleep_duration >>= shift) {
-				uint64_t max, start;
-				for (max = UINT64_C(0); (start = stepper->now()) < end - max;) {
-					stepper->sleep(current_sleep_duration);
-					if (stepper->now() - start > max) {
-						max = stepper->now() - start;
-					}
-				}
-				if (max <= stepper->zero_sleep_duration) {
-					break;
-				}
-			}
-
-			for (uint64_t max = UINT64_C(0), start; (start = stepper->now()) < end - max;) {
-				stepper->sleep(UINT64_C(0));
-				if ((stepper->zero_sleep_duration = stepper->now() - start) > max) {
-					max = stepper->now() - start;
-				}
-			}
 		}
+		else {
+			current_sleep_duration = UINT64_C(0);
+		}
+		#endif
 
-		#else
-		// This has the flavor of Zeno's dichotomous
-		// paradox of motion, as it successively
-		// divides the time remaining to sleep, but
-		// attempts to stop short of the deadline to
-		// hopefully be able to precisely sleep up to
-		// the deadline below this loop. The divisor is
-		// larger than two though, as it produces
-		// better behavior, and seems to work fine in
-		// testing on real hardware.
+		// This has the flavor of Zeno's dichotomous paradox of motion,
+		// as it successively divides the time remaining to sleep, but
+		// attempts to stop short of the deadline to hopefully be able
+		// to precisely sleep up to the deadline below this loop. The
+		// divisor is larger than two though, as it produces better
+		// behavior, and seems to work fine in testing on real
+		// hardware.
 		current_sleep_duration >>= shift;
 		for (
 			uint64_t max = stepper->zero_sleep_duration;
@@ -412,13 +390,12 @@ void nanotime_step(nanotime_step_data* const stepper) {
 			}
 		}
 
-		// After (hopefully) stopping short of the deadline by
-		// a small amount, do small sleeps here to get closer
-		// to the deadline, but again attempting to stop short
-		// by an even smaller amount. It's best to do larger
-		// sleeps as done in the above loop, to reduce
-		// CPU/power usage, as each sleep call has a CPU/power
-		// usage cost.
+		// After (hopefully) stopping short of the deadline by a small
+		// amount, do small sleeps here to get closer to the deadline,
+		// but again attempting to stop short by an even smaller
+		// amount. It's best to do larger sleeps as done in the above
+		// loop, to reduce CPU/power usage, as each sleep call has a
+		// CPU/power usage cost.
 		uint64_t max = UINT64_C(0);
 		uint64_t start;
 		while ((start = stepper->now()) + max < end) {
@@ -427,8 +404,6 @@ void nanotime_step(nanotime_step_data* const stepper) {
 				max = stepper->zero_sleep_duration;
 			}
 		}
-
-		#endif
 
 		// Finally, do a busyloop to precisely sleep up to the
 		// deadline. The code above this loop attempts to reduce the
