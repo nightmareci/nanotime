@@ -56,7 +56,7 @@
  */
 
 #ifdef __cplusplus
-#if (__cplusplus < 201103L)
+#if (__cplusplus < 201103L) || (defined(_MSVC_LANG) && (_MSVC_LANG < 201103L))
 #error "Current C++ standard is not at least C++11, the nanotime library requires at least C++11."
 #endif
 #elif !defined(__STDC_VERSION__) || (__STDC_VERSION__ < 199901L)
@@ -70,7 +70,7 @@ extern "C" {
 #include <stdint.h>
 #include <assert.h>
 
-#define NSEC_PER_SEC 1000000000L
+#define NANOTIME_NSEC_PER_SEC 1000000000L
 
 #ifndef NANOTIME_ONLY_STEP
 
@@ -115,7 +115,7 @@ void nanotime_step(nanotime_step_data* const stepper);
 #ifdef _MSC_VER
 #define NANOTIME_RESOLUTION UINT64_C(100)
 
-#elif (defined(__unix__) || defined(__APPLE__) || defined(__MACH__)) || (defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)) || (defined(__cplusplus) && (__cplusplus >= 201103L))
+#else
 #define NANOTIME_RESOLUTION UINT64_C(1)
 
 #endif
@@ -143,7 +143,6 @@ uint64_t nanotime_now() {
 
 #ifndef NANOTIME_SLEEP_IMPLEMENTED
 void nanotime_sleep(uint64_t nsec_count) {
-	static HANDLE timer = NULL;
 	static LARGE_INTEGER freq = { 0 };
 	LARGE_INTEGER dueTime;
 
@@ -155,11 +154,10 @@ void nanotime_sleep(uint64_t nsec_count) {
 		 * behavior is specified in Microsoft's Windows documentation.
 		 */
 		SleepEx(0UL, FALSE);
-		return 0;
 	}
 	else {
+		HANDLE timer = NULL;
 		if (
-			timer == NULL &&
 #ifdef CREATE_WAITABLE_TIMER_HIGH_RESOLUTION
 			/*
 			 * Requesting a high resolution timer can make quite
@@ -182,6 +180,8 @@ void nanotime_sleep(uint64_t nsec_count) {
 
 		SetWaitableTimer(timer, &dueTime, 0L, NULL, NULL, FALSE);
 		WaitForSingleObject(timer, INFINITE);
+
+		CloseHandle(timer);
 	}
 }
 #define NANOTIME_SLEEP_IMPLEMENTED
@@ -199,7 +199,7 @@ uint64_t nanotime_now() {
 	struct timespec now;
 	const int status = clock_gettime(CLOCK_REALTIME, &now);
 	assert(status == 0 || (status == -1 && errno != EOVERFLOW));
-	return (uint64_t)now.tv_sec * (uint64_t)NSEC_PER_SEC + (uint64_t)now.tv_nsec;
+	return (uint64_t)now.tv_sec * (uint64_t)NANOTIME_NSEC_PER_SEC + (uint64_t)now.tv_nsec;
 }
 #define NANOTIME_NOW_IMPLEMENTED
 
@@ -219,7 +219,7 @@ uint64_t nanotime_now() {
 	host_get_clock_service(mach_host_self(), CALENDAR_CLOCK, &clock_serv);
 	clock_get_time(clock_serv, &now);
 	mach_port_deallocate(mach_task_self(), clock_serv);
-	return (uint64_t)now.tv_sec * (uint64_t)NSEC_PER_SEC + (uint64_t)now.tv_nsec;
+	return (uint64_t)now.tv_sec * (uint64_t)NANOTIME_NSEC_PER_SEC + (uint64_t)now.tv_nsec;
 }
 #define NANOTIME_NOW_IMPLEMENTED
 #endif
@@ -229,8 +229,8 @@ uint64_t nanotime_now() {
 #include <errno.h>
 void nanotime_sleep(uint64_t nsec_count) {
 	const struct timespec req = {
-		.tv_sec = (time_t)(nsec_count / NSEC_PER_SEC),
-		.tv_nsec = (long)(nsec_count % NSEC_PER_SEC)
+		.tv_sec = (time_t)(nsec_count / NANOTIME_NSEC_PER_SEC),
+		.tv_nsec = (long)(nsec_count % NANOTIME_NSEC_PER_SEC)
 	};
 	const int status = nanosleep(&req, NULL);
 	assert(status == 0 || (status == -1 && errno != EINVAL));
@@ -245,7 +245,7 @@ uint64_t nanotime_now() {
 	struct timespec now;
 	const int status = timespec_get(&now, TIME_UTC);
 	assert(status == TIME_UTC);
-	return (uint64_t)now.tv_sec * (uint64_t)NSEC_PER_SEC + (uint64_t)now.tv_nsec;
+	return (uint64_t)now.tv_sec * (uint64_t)NANOTIME_NSEC_PER_SEC + (uint64_t)now.tv_nsec;
 }
 #define NANOTIME_NOW_IMPLEMENTED
 #endif
@@ -256,8 +256,8 @@ uint64_t nanotime_now() {
 #include <threads.h>
 void nanotime_sleep(uint64_t nsec_count) {
 	const struct timespec req = {
-		.tv_sec = (time_t)(nsec_count / NSEC_PER_SEC),
-		.tv_nsec = (long)(nsec_count % NSEC_PER_SEC)
+		.tv_sec = (time_t)(nsec_count / NANOTIME_NSEC_PER_SEC),
+		.tv_nsec = (long)(nsec_count % NANOTIME_NSEC_PER_SEC)
 	};
 	const int status = thrd_sleep(&req, NULL);
 	assert(status == 0 || status == -1);
@@ -272,7 +272,7 @@ void nanotime_sleep(uint64_t nsec_count) {
 }
 #endif
 
-#if !defined(NANOTIME_ONLY_STEP) && defined(__cplusplus) && (__cplusplus >= 201103L) && defined(NANOTIME_IMPLEMENTATION)
+#if !defined(NANOTIME_ONLY_STEP) && defined(__cplusplus) && defined(NANOTIME_IMPLEMENTATION)
 
 #ifndef NANOTIME_NOW_IMPLEMENTED
 #include <cstdint>
@@ -338,7 +338,7 @@ void nanotime_step_init(nanotime_step_data* const stepper, const uint64_t sleep_
 
 void nanotime_step(nanotime_step_data* const stepper) {
 	if (stepper->accumulator < stepper->sleep_duration) {
-		uint64_t current_sleep_duration = stepper->sleep_duration - stepper->accumulator;
+		uint64_t current_sleep_duration = stepper->sleep_duration > stepper->accumulator ? stepper->sleep_duration - stepper->accumulator : UINT64_C(0);
 		const uint64_t end = stepper->sleep_point + current_sleep_duration;
 		const uint64_t shift = 4;
 
@@ -386,65 +386,45 @@ void nanotime_step(nanotime_step_data* const stepper) {
 		}
 
 		#else
-		if (stepper->sleep_duration > stepper->zero_sleep_duration * UINT64_C(2)) {
-			if (stepper->sleep_duration > stepper->overhead_duration) {
-				uint64_t current_sleep_duration = stepper->sleep_duration >> shift;
-
-				// This has the flavor of Zeno's dichotomous
-				// paradox of motion, as it successively
-				// divides the time remaining to sleep, but
-				// attempts to stop short of the deadline to
-				// hopefully be able to precisely sleep up to
-				// the deadline below this loop. The divisor is
-				// larger than two though, as it produces
-				// better behavior, and seems to work fine in
-				// testing on real hardware.
-				for (
-					uint64_t max = UINT64_C(0);
-					stepper->now() < end - max && current_sleep_duration > stepper->overhead_duration && current_sleep_duration >= UINT64_C(0);
-					current_sleep_duration >>= shift
-				) {
-					uint64_t adjusted_sleep = current_sleep_duration - stepper->overhead_duration;
-					max = UINT64_C(0);
-					uint64_t start;
-					while (max < stepper->sleep_duration && (start = stepper->now()) < end - max) {
-						stepper->sleep(adjusted_sleep);
-						uint64_t slept;
-						if ((slept = stepper->now() - start) > max) {
-							max = slept;
-						}
-
-						if (slept <= adjusted_sleep) {
-							stepper->overhead_duration = UINT64_C(0);
-							adjusted_sleep = current_sleep_duration;
-						}
-						else {
-							stepper->overhead_duration = slept - adjusted_sleep;
-							if (current_sleep_duration <= stepper->overhead_duration) {
-								adjusted_sleep = UINT64_C(0);
-							}
-							else {
-								adjusted_sleep = current_sleep_duration - stepper->overhead_duration;
-							}
-						}
-					}
+		// This has the flavor of Zeno's dichotomous
+		// paradox of motion, as it successively
+		// divides the time remaining to sleep, but
+		// attempts to stop short of the deadline to
+		// hopefully be able to precisely sleep up to
+		// the deadline below this loop. The divisor is
+		// larger than two though, as it produces
+		// better behavior, and seems to work fine in
+		// testing on real hardware.
+		current_sleep_duration >>= shift;
+		for (
+			uint64_t max = stepper->zero_sleep_duration;
+			stepper->now() + max < end && current_sleep_duration > UINT64_C(0);
+			current_sleep_duration >>= shift
+		) {
+			max = stepper->zero_sleep_duration;
+			uint64_t start;
+			while (max < stepper->sleep_duration && (start = stepper->now()) + max < end) {
+				stepper->sleep(current_sleep_duration);
+				uint64_t slept;
+				if ((slept = stepper->now() - start) > max) {
+					max = slept;
 				}
 			}
+		}
 
-			// After (hopefully) stopping short of the deadline by
-			// a small amount, do small sleeps here to get closer
-			// to the deadline, but again attempting to stop short
-			// by an even smaller amount. It's best to do larger
-			// sleeps as done in the above loop, to reduce
-			// CPU/power usage, as each sleep call has a CPU/power
-			// usage cost.
-			uint64_t max = UINT64_C(0);
-			uint64_t start;
-			while ((start = stepper->now()) < end - max) {
-				stepper->sleep(UINT64_C(0));
-				if ((stepper->zero_sleep_duration = stepper->now() - start) > max) {
-					max = stepper->zero_sleep_duration;
-				}
+		// After (hopefully) stopping short of the deadline by
+		// a small amount, do small sleeps here to get closer
+		// to the deadline, but again attempting to stop short
+		// by an even smaller amount. It's best to do larger
+		// sleeps as done in the above loop, to reduce
+		// CPU/power usage, as each sleep call has a CPU/power
+		// usage cost.
+		uint64_t max = UINT64_C(0);
+		uint64_t start;
+		while ((start = stepper->now()) + max < end) {
+			stepper->sleep(UINT64_C(0));
+			if ((stepper->zero_sleep_duration = stepper->now() - start) > max) {
+				max = stepper->zero_sleep_duration;
 			}
 		}
 

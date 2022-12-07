@@ -13,17 +13,17 @@ int main() {
     // Get the time before sleeping.
     const uint64_t start = nanotime_now();
 
-    // Sleep for one second. NSEC_PER_SEC is a convenience constant defined to
-    // make it easy to convert to/from seconds and nanoseconds.
-    nanotime_sleep(1 * NSEC_PER_SEC);
+    // Sleep for one second. NANOTIME_NSEC_PER_SEC is a convenience constant
+    // defined to make it easy to convert to/from seconds and nanoseconds.
+    nanotime_sleep(1 * NANOTIME_NSEC_PER_SEC);
 
     // Get the time after sleeping.
     const uint64_t end = nanotime_now();
 
     // The nanosecond count duration actually slept can be calculated here via
     // "end - start". And you can convert that nanosecond count to seconds via
-    // "(end - start) / (double)NSEC_PER_SEC".
-    printf("Slept: %lf seconds\n", (end - start) / (double)NSEC_PER_SEC);
+    // "(end - start) / (double)NANOTIME_NSEC_PER_SEC".
+    printf("Slept: %lf seconds\n", (end - start) / (double)NANOTIME_NSEC_PER_SEC);
 
     return 0;
 }
@@ -44,12 +44,12 @@ An implementation of the [fixed timestep](https://www.gafferongames.com/post/fix
 
 int main() {
     nanotime_step_data stepper;
-    nanotime_step_init(&stepper, NSEC_PER_SEC / 1000, nanotime_now, nanotime_sleep);
+    nanotime_step_init(&stepper, NANOTIME_NSEC_PER_SEC / 1000, nanotime_now, nanotime_sleep);
     for (int i = 0; i < 1000; i++) {
         const uint64_t start = stepper.sleep_point;
         nanotime_step(&stepper);
         const uint64_t duration = stepper.sleep_point - start;
-        printf("Slept %lf seconds\n", (double)duration / NSEC_PER_SEC);
+        printf("Slept %lf seconds\n", (double)duration / NANOTIME_NSEC_PER_SEC);
     }
 
     return 0;
@@ -67,6 +67,6 @@ If you want to use alternative timestamp and sleep functions, you can `#define N
 #include "SDL.h"
 // ...
     nanotime_step_data stepper;
-    nanotime_step_init(&stepper, NSEC_PER_SEC / 60, SDL_GetTicksNS, SDL_DelayNS);
+    nanotime_step_init(&stepper, NANOTIME_NSEC_PER_SEC / 60, SDL_GetTicksNS, SDL_DelayNS);
 // ...
 ```

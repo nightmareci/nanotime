@@ -59,6 +59,7 @@
 #include "nanotime.h"
 
 int main(int argc, char** argv) {
+	__cplusplus;
 	double req_seconds = -1.0;
 
 	if (argc <= 1 || sscanf(argv[1], "%lf", &req_seconds) != 1 || req_seconds < 0.0) {
@@ -70,20 +71,20 @@ int main(int argc, char** argv) {
 
 	printf("Requested time to suspend (seconds): %.9lf\n", req_seconds);
 
-	const uint64_t req = (uint64_t)(req_seconds * NSEC_PER_SEC);
+	const uint64_t req = (uint64_t)(req_seconds * NANOTIME_NSEC_PER_SEC);
 	const uint64_t start = nanotime_now();
 	nanotime_sleep(req);
 	const uint64_t end = nanotime_now();
 	const uint64_t elapsed = end - start;
 
-	printf("Suspended time (seconds): %.9lf\n", (double)elapsed / NSEC_PER_SEC);
+	printf("Suspended time (seconds): %.9lf\n", (double)elapsed / NANOTIME_NSEC_PER_SEC);
 	if (elapsed < req) {
 		const uint64_t under = req - elapsed;
-		printf("Suspension time undershoot (seconds): %.9lf\n", (double)under / NSEC_PER_SEC);
+		printf("Suspension time undershoot (seconds): %.9lf\n", (double)under / NANOTIME_NSEC_PER_SEC);
 	}
 	else if (elapsed > req) {
 		const uint64_t over = elapsed - req;
-		printf("Suspension time overshoot (seconds): %.9lf\n", (double)over / NSEC_PER_SEC);
+		printf("Suspension time overshoot (seconds): %.9lf\n", (double)over / NANOTIME_NSEC_PER_SEC);
 	}
 	else if (elapsed == req) {
 		printf("No remaining suspension time.\n");
