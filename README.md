@@ -1,5 +1,5 @@
 # nanotime
-A single-header library that provides nanosecond-resolution timestamps and sleeps for a variety of platforms.
+A single-header library that provides nanosecond-resolution timestamps, sleeps, and accurate-sleep fixed timestepping for a variety of platforms.
 
 Define `NANOTIME_IMPLEMENTATION` before one `#include` of `nanotime.h` for the implementation, then `#include` the `nanotime.h` header without that definition in other sources using `nanotime_` features.
 
