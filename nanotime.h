@@ -55,12 +55,20 @@
  * IN THE SOFTWARE.
  */
 
-#ifdef __cplusplus
-#if (__cplusplus < 201103L) || (defined(_MSVC_LANG) && (_MSVC_LANG < 201103L))
-#error "Current C++ standard is not at least C++11, the nanotime library requires at least C++11."
-#endif
-#elif !defined(__STDC_VERSION__) || (__STDC_VERSION__ < 199901L)
-#error "Current C standard is not at least C99, the nanotime library requires at least C99."
+#if defined(_MSC_VER)
+	#if (_MSC_VER < 1600)
+		#error "Current Visual Studio version is not at least Visual Studio 2010, the nanotime library requires at least 2010."
+	#endif
+#elif defined(__cplusplus)
+	#if (__cplusplus < 201103L)
+		#error "Current C++ standard is not at least C++11, the nanotime library requires at least C++11."
+	#endif
+#elif defined(__STDC_VERSION__)
+	#if (__STDC_VERSION__ < 199901L)
+		#error "Current C standard is not at least C99, the nanotime library requires at least C99."
+	#endif
+#else
+	#error "Current C or C++ standard is unknown, the nanotime library requires stdint.h to be available (C99 or higher, C++11 or higher, Visual Studio 2010 or higher)."
 #endif
 
 #ifdef __cplusplus

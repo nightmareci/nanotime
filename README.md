@@ -31,10 +31,10 @@ int main() {
 
 C and C++ programs for testing the timestamp and sleep functions are provided; the C version requires C11, the C++ version requires C++11.
 
-When using the included timestamp and sleep functions, the `nanotime.h` header has a somewhat complicated support matrix; C versions below C99 are entirely unsupported, as are C++ versions below C++11:
+When using the included timestamp and sleep functions, the `nanotime.h` header has a somewhat complicated support matrix; `stdint.h` must be available:
 * Using C11 or higher with the optional C threads library will always be supported.
-* Using C++ always requires C++11; with C++11 in use, the library will always be supported.
-* Using C99 is somewhat supported; using C99 requires platform-specific features to be supported. Some common platforms are currently supported (Windows, macOS, Linux, perhaps other POSIX/UNIX platforms).
+* Using C++11 or higher will always be supported.
+* Using C versions other than C11 or higher with threading support is somewhat supported, as they require platform-specific features to be supported. Some common platforms are currently supported (Windows, macOS, Linux, perhaps other POSIX/UNIX platforms). For Windows/MSVC support, Visual Studio 2010 or higher is required, with the other supported platforms requiring C99 or higher.
 
 An implementation of the [fixed timestep](https://www.gafferongames.com/post/fix_your_timestep/) algorithm is provided, using a performance-optimized [accurate sleep](https://blog.bearcats.nl/accurate-sleep-function/) algorithm I've developed myself, to make it very easy to get precisely timed updates/frames in games:
 ```c
@@ -58,7 +58,7 @@ int main() {
 
 An example C/SDL2 program is provided, demonstrating how the timestep feature can be integrated into games; the example C/SDL2 program requires C11.
 
-If you want to use alternative timestamp and sleep functions, you can `#define NANOTIME_ONLY_STEP` before including `nanotime.h`; by omitting the timestamp and sleep functions, you can use the timestep feature when the timestamp and sleep functions aren't available on your target platform(s). The timestep feature is entirely platform-independent C code, so it only requires C99 or C++11:
+If you want to use alternative timestamp and sleep functions, you can `#define NANOTIME_ONLY_STEP` before including `nanotime.h`; by omitting the timestamp and sleep functions, you can use the timestep feature when the timestamp and sleep functions aren't available on your target platform(s), or if you don't wish to use the included timestamp and sleep functions in lieu of others. The timestep feature doesn't use platform-specific features, so its support matrix is simpler, requiring C99 or higher, C++11 or higher, or Visual Studio 2010 or higher:
 ```c
 // SDL3 example
 #define NANOTIME_ONLY_STEP

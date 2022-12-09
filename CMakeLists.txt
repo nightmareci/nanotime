@@ -65,15 +65,6 @@ set(CMAKE_C_STANDARD_REQUIRED TRUE)
 find_package(SDL2 REQUIRED)
 
 add_executable(test_nanotime_sleep_cpp test_nanotime_sleep.cpp)
-if(MSVC)
-	# As of last editing this file, MSVC leaves __cplusplus as C++98 regardless
-	# of standards settings by default, but manually adding this option forces
-	# __cplusplus to be set properly. However, an MSVC-specific definition is
-	# provided to get the actual C++ version in use, _MSVC_LANG, even if
-	# __cplusplus is C++98 per the compatibility-maintaining behavior.
-	target_compile_options(test_nanotime_sleep_cpp PRIVATE "/Zc:__cplusplus")
-endif()
-
 add_executable(test_nanotime_sleep_c test_nanotime_sleep.c)
 
 add_executable(test_nanotime_step test_nanotime_step.c)
