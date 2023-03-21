@@ -34,7 +34,7 @@ C and C++ programs for testing the timestamp and sleep functions are provided; t
 When using the included timestamp and sleep functions, the `nanotime.h` header has a somewhat complicated support matrix; `stdint.h` must be available:
 * Using C11 or higher with the optional C threads library will always be supported.
 * Using C++11 or higher will always be supported.
-* Using C versions other than C11 or higher with threading support is somewhat supported, as they require platform-specific features to be supported. Some common platforms are currently supported (Windows, macOS, Linux, perhaps other POSIX/UNIX platforms). For Windows/MSVC support, Visual Studio 2010 or higher is required, with the other supported platforms requiring C99 or higher.
+* Using C versions other than C11 or higher without threading support is somewhat supported, as they require platform-specific features to be supported. Some common platforms are currently supported (Windows, macOS, Linux, perhaps other POSIX/UNIX platforms). For Windows/MSVC support, Visual Studio 2010 or higher is required, with the other supported platforms requiring C99 or higher.
 
 An implementation of the [fixed timestep](https://www.gafferongames.com/post/fix_your_timestep/) algorithm is provided, using a performance-optimized [accurate sleep](https://blog.bearcats.nl/accurate-sleep-function/) algorithm I've developed myself, to make it very easy to get precisely timed updates/frames in games:
 ```c
