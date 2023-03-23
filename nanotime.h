@@ -151,7 +151,6 @@ uint64_t nanotime_now() {
 
 #ifndef NANOTIME_SLEEP_IMPLEMENTED
 void nanotime_sleep(uint64_t nsec_count) {
-	static LARGE_INTEGER freq = { 0 };
 	LARGE_INTEGER dueTime;
 
 	if (nsec_count < NANOTIME_RESOLUTION) {
