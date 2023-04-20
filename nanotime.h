@@ -58,6 +58,9 @@
 #if defined(_MSC_VER)
 	#if (_MSC_VER < 1600)
 		#error "Current Visual Studio version is not at least Visual Studio 2010, the nanotime library requires at least 2010."
+	#else
+		#define WIN32_LEAN_AND_MEAN
+		#include <Windows.h>
 	#endif
 #elif defined(__cplusplus)
 	#if (__cplusplus < 201103L)
@@ -71,11 +74,16 @@
 	#error "Current C or C++ standard is unknown, the nanotime library requires stdint.h to be available (C99 or higher, C++11 or higher, Visual Studio 2010 or higher)."
 #endif
 
+#if defined(__unix__)
+#include <unistd.h>
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 #include <stdint.h>
+#include <stdbool.h>
 #include <assert.h>
 
 #define NANOTIME_NSEC_PER_SEC 1000000000L
@@ -92,6 +100,28 @@ uint64_t nanotime_now();
  * duration may be less than, equal to, or greater than the time requested.
  */
 void nanotime_sleep(uint64_t nsec_count);
+
+#endif
+
+#ifndef NANOTIME_ONLY_STEP
+
+/*
+ * The yield function is provided for some platforms, but in the case of
+ * unknown platforms, the function is defined as a no-op.
+ */
+
+#ifdef _MSC_VER
+#define nanotime_yield() YieldProcessor()
+#elif defined(__unix__) && (_POSIX_VERSION >= 200112L)
+#include <sched.h>
+#define nanotime_yield() (void)sched_yield()
+#elif defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 200112L) && !defined(__STDC_NO_THREADS__)
+#include <threads.h>
+#define nanotime_yield() thrd_yield()
+#elif !defined(__cplusplus)
+#define nanotime_yield()
+#define NANOTIME_YIELD_NOP
+#endif
 
 #endif
 
@@ -116,9 +146,10 @@ void nanotime_step_init(nanotime_step_data* const stepper, const uint64_t sleep_
  * Does one step of sleeping for a fixed timestep logic update cycle. It makes
  * a best-attempt at a precise delay per iteration, but might skip a cycle of
  * sleeping if skipping sleeps is required to catch up to the correct
- * wall-clock time.
+ * wall-clock time. Returns true if a sleep up to the latest target sleep end
+ * time occurred, otherwise returns false in the case of a sleep step skip.
  */
-void nanotime_step(nanotime_step_data* const stepper);
+bool nanotime_step(nanotime_step_data* const stepper);
 
 #ifdef _MSC_VER
 #define NANOTIME_RESOLUTION UINT64_C(100)
@@ -137,8 +168,6 @@ void nanotime_step(nanotime_step_data* const stepper);
  */
 
 #ifdef _MSC_VER
-#define WIN32_LEAN_AND_MEAN
-#include <Windows.h>
 
 #ifndef NANOTIME_NOW_IMPLEMENTED
 uint64_t nanotime_now() {
@@ -167,13 +196,12 @@ void nanotime_sleep(uint64_t nsec_count) {
 		if (
 #ifdef CREATE_WAITABLE_TIMER_HIGH_RESOLUTION
 			/*
-			 * Requesting a high resolution timer can make quite
-			 * the difference, so always request high resolution if
-			 * available.  It's available in Windows 10 1803 and
-			 * above. This arrangement of building it if the build
-			 * system supports it will allow the executable to use
-			 * high resolution if available on a user's system, but
-			 * revert to low resolution if the user's system
+			 * Requesting a high resolution timer can make quite the
+			 * difference, so always request high resolution if available. It's
+			 * available in Windows 10 1803 and above. This arrangement of
+			 * building it if the build system supports it will allow the
+			 * executable to use high resolution if available on a user's
+			 * system, but revert to low resolution if the user's system
 			 * doesn't support high resolution.
 			 */
 			(timer = CreateWaitableTimerEx(NULL, NULL, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS)) == NULL &&
@@ -198,7 +226,6 @@ void nanotime_sleep(uint64_t nsec_count) {
 
 #if defined(__unix__) && !defined(NANOTIME_NOW_IMPLEMENTED)
 // Current platform is some version of POSIX, that might have clock_gettime.
-#include <unistd.h>
 #if _POSIX_VERSION >= 199309L
 #include <time.h>
 #include <errno.h>
@@ -279,6 +306,13 @@ void nanotime_sleep(uint64_t nsec_count) {
 }
 #endif
 
+#ifndef NANOTIME_ONLY_STEP
+#if defined(__cplusplus)
+#include <thread>
+#define nanotime_yield() std::this_thread::yield()
+#endif
+#endif
+
 #if !defined(NANOTIME_ONLY_STEP) && defined(__cplusplus) && defined(NANOTIME_IMPLEMENTATION)
 
 #ifndef NANOTIME_NOW_IMPLEMENTED
@@ -343,9 +377,10 @@ void nanotime_step_init(nanotime_step_data* const stepper, const uint64_t sleep_
 	stepper->sleep_point = now();
 }
 
-void nanotime_step(nanotime_step_data* const stepper) {
+bool nanotime_step(nanotime_step_data* const stepper) {
+	bool slept;
 	if (stepper->accumulator < stepper->sleep_duration) {
-		uint64_t current_sleep_duration = stepper->sleep_duration > stepper->accumulator ? stepper->sleep_duration - stepper->accumulator : UINT64_C(0);
+		uint64_t current_sleep_duration = stepper->sleep_duration - stepper->accumulator;
 		const uint64_t end = stepper->sleep_point + current_sleep_duration;
 		const uint64_t shift = 4;
 
@@ -390,9 +425,9 @@ void nanotime_step(nanotime_step_data* const stepper) {
 			uint64_t start;
 			while (max < stepper->sleep_duration && (start = stepper->now()) + max < end) {
 				stepper->sleep(current_sleep_duration);
-				uint64_t slept;
-				if ((slept = stepper->now() - start) > max) {
-					max = slept;
+				uint64_t slept_duration;
+				if ((slept_duration = stepper->now() - start) > max) {
+					max = slept_duration;
 				}
 			}
 		}
@@ -422,8 +457,13 @@ void nanotime_step(nanotime_step_data* const stepper) {
 
 		stepper->accumulator += current_time - stepper->sleep_point;
 		stepper->sleep_point = current_time;
+		slept = true;
+	}
+	else {
+		slept = false;
 	}
 	stepper->accumulator -= stepper->sleep_duration;
+	return slept;
 }
 
 #ifdef __cplusplus

@@ -31,10 +31,10 @@
  *
  * The MIT License (MIT)
  *
- * Copyright ¬© 2022 Brandon McGriff <nightmareci@gmail.com>
+ * Copyright © 2022 Brandon McGriff <nightmareci@gmail.com>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the ‚ÄúSoftware‚Äù), to
+ * of this software and associated documentation files (the ìSoftwareî), to
  * deal in the Software without restriction, including without limitation the
  * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
  * sell copies of the Software, and to permit persons to whom the Software is
@@ -43,7 +43,7 @@
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
  *
- * THE SOFTWARE IS PROVIDED ‚ÄúAS IS‚Äù, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * THE SOFTWARE IS PROVIDED ìAS ISî, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
  * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -52,42 +52,5 @@
  * IN THE SOFTWARE.
  */
 
-#include <cstdio>
-#include <cstdlib>
-
 #define NANOTIME_IMPLEMENTATION
-#include "nanotime.h"
-
-int main(int argc, char** argv) {
-	double req_seconds = -1.0;
-
-	if (argc <= 1 || sscanf(argv[1], "%lf", &req_seconds) != 1 || req_seconds < 0.0) {
-		fprintf(stderr, "Usage: test_nanotime_sleep [seconds]\n");
-		fprintf(stderr, "[seconds] must be greater than or equal to 0.0.\n");
-		fprintf(stderr, "Example, testing 1 millisecond suspension: test_nanotime_sleep 0.001\n");
-		return EXIT_FAILURE;
-	}
-
-	printf("Requested time to suspend (seconds): %.9f\n", req_seconds);
-
-	const uint64_t req = (uint64_t)(req_seconds * NANOTIME_NSEC_PER_SEC);
-	const uint64_t start = nanotime_now();
-	nanotime_sleep(req);
-	const uint64_t end = nanotime_now();
-	const uint64_t elapsed = end - start;
-
-	printf("Suspended time (seconds): %.9f\n", (double)elapsed / NANOTIME_NSEC_PER_SEC);
-	if (elapsed < req) {
-		const uint64_t under = req - elapsed;
-		printf("Suspension time undershoot (seconds): %.9f\n", (double)under / NANOTIME_NSEC_PER_SEC);
-	}
-	else if (elapsed > req) {
-		const uint64_t over = elapsed - req;
-		printf("Suspension time overshoot (seconds): %.9f\n", (double)over / NANOTIME_NSEC_PER_SEC);
-	}
-	else if (elapsed == req) {
-		printf("No remaining suspension time.\n");
-	}
-
-	return EXIT_SUCCESS;
-}
+#include "framework/nanotime.h"
