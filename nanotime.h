@@ -112,15 +112,21 @@ void nanotime_sleep(uint64_t nsec_count);
 
 #ifdef _MSC_VER
 #define nanotime_yield() YieldProcessor()
-#elif defined(__unix__) && (_POSIX_VERSION >= 200112L)
+#define NANOTIME_YIELD_IMPLEMENTED
+#elif (defined(__unix__) || defined(__APPLE__)) && (_POSIX_VERSION >= 200112L)
 #include <sched.h>
 #define nanotime_yield() (void)sched_yield()
+#define NANOTIME_YIELD_IMPLEMENTED
 #elif defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 200112L) && !defined(__STDC_NO_THREADS__)
 #include <threads.h>
 #define nanotime_yield() thrd_yield()
-#elif !defined(__cplusplus)
+#define NANOTIME_YIELD_IMPLEMENTED
+#elif defined(__cplusplus)
+extern void (* const nanotime_yield)();
+#else
 #define nanotime_yield()
 #define NANOTIME_YIELD_NOP
+#define NANOTIME_YIELD_IMPLEMENTED
 #endif
 
 #endif
@@ -306,11 +312,9 @@ void nanotime_sleep(uint64_t nsec_count) {
 }
 #endif
 
-#ifndef NANOTIME_ONLY_STEP
-#if defined(__cplusplus)
+#if !defined(NANOTIME_ONLY_STEP) && defined(__cplusplus) && !defined(NANOTIME_YIELD_IMPLEMENTED)
 #include <thread>
-#define nanotime_yield() std::this_thread::yield()
-#endif
+extern "C" void (* const nanotime_yield)() = std::this_thread::yield;
 #endif
 
 #if !defined(NANOTIME_ONLY_STEP) && defined(__cplusplus) && defined(NANOTIME_IMPLEMENTATION)
@@ -382,29 +386,40 @@ bool nanotime_step(nanotime_step_data* const stepper) {
 	if (stepper->accumulator < stepper->sleep_duration) {
 		uint64_t current_sleep_duration = stepper->sleep_duration - stepper->accumulator;
 		const uint64_t end = stepper->sleep_point + current_sleep_duration;
-		const uint64_t shift = 4;
+		const uint64_t shift = UINT64_C(4);
 
 		#ifdef __APPLE__
 		// Start with a big sleep. This helps reduce CPU/power use on
 		// macOS vs. many shorter sleeps. Shorter sleeps are still done
-		// below, but this reduces the number of shorter sleeps.
-		if (current_sleep_duration > stepper->overhead_duration) {
-			const uint64_t start_sleep = stepper->now();
-			stepper->sleep(current_sleep_duration - stepper->overhead_duration);
-			const uint64_t end_sleep = stepper->now();
-			if (end_sleep - start_sleep > current_sleep_duration) {
-				stepper->overhead_duration = (end_sleep - start_sleep) - current_sleep_duration;
+		// below, but this reduces the number of shorter sleeps. The
+		// overhead multiplier helps reduce the frequency of
+		// overshooting the target end time.
+		const uint64_t overhead_start = stepper->now();
+		// TODO: This was carefully tuned to be well-behaved on Apple
+		// Silicon M1, but hasn't been tested on any Intel Mac; test on
+		// an Intel Mac to see if this multiplier is appropriate there,
+		// if not, special-case for each CPU type.
+		const uint64_t overhead_multiplier = UINT64_C(100);
+		if (current_sleep_duration > stepper->overhead_duration * overhead_multiplier) {
+			const uint64_t overhead_sleep_duration = current_sleep_duration - stepper->overhead_duration * overhead_multiplier;
+			stepper->sleep(overhead_sleep_duration);
+			const uint64_t overhead_end = stepper->now();
+			if (overhead_end - overhead_start > overhead_sleep_duration) {
+				stepper->overhead_duration = (overhead_end - overhead_start) - overhead_sleep_duration;
+			}
+			else {
+				stepper->overhead_duration = UINT64_C(0);
 			}
 		}
 		else {
 			stepper->overhead_duration = UINT64_C(0);
 		}
 
-		if ((current_sleep_duration = stepper->now()) < end) {
-			current_sleep_duration = end - current_sleep_duration;
+		if (stepper->now() - overhead_start < current_sleep_duration && stepper->now() < end) {
+			current_sleep_duration -= stepper->now() - overhead_start;
 		}
 		else {
-			current_sleep_duration = UINT64_C(0);
+			goto step_end;
 		}
 		#endif
 
@@ -425,6 +440,13 @@ bool nanotime_step(nanotime_step_data* const stepper) {
 			uint64_t start;
 			while (max < stepper->sleep_duration && (start = stepper->now()) + max < end) {
 				stepper->sleep(current_sleep_duration);
+				const uint64_t end_sleep = stepper->now();
+				if (end_sleep - start > current_sleep_duration) {
+					stepper->overhead_duration = (end_sleep - start) - current_sleep_duration;
+				}
+				else {
+					stepper->overhead_duration = UINT64_C(0);
+				}
 				uint64_t slept_duration;
 				if ((slept_duration = stepper->now() - start) > max) {
 					max = slept_duration;
@@ -432,32 +454,36 @@ bool nanotime_step(nanotime_step_data* const stepper) {
 			}
 		}
 
-		// After (hopefully) stopping short of the deadline by a small
-		// amount, do small sleeps here to get closer to the deadline,
-		// but again attempting to stop short by an even smaller
-		// amount. It's best to do larger sleeps as done in the above
-		// loop, to reduce CPU/power usage, as each sleep call has a
-		// CPU/power usage cost.
-		uint64_t max = UINT64_C(0);
-		uint64_t start;
-		while ((start = stepper->now()) + max < end) {
-			stepper->sleep(UINT64_C(0));
-			if ((stepper->zero_sleep_duration = stepper->now() - start) > max) {
-				max = stepper->zero_sleep_duration;
+		{
+			// After (hopefully) stopping short of the deadline by a small
+			// amount, do small sleeps here to get closer to the deadline,
+			// but again attempting to stop short by an even smaller
+			// amount. It's best to do larger sleeps as done in the above
+			// loop, to reduce CPU/power usage, as each sleep call has a
+			// CPU/power usage cost.
+			uint64_t max = stepper->zero_sleep_duration;
+			uint64_t start;
+			while ((start = stepper->now()) + max < end) {
+				stepper->sleep(UINT64_C(0));
+				if ((stepper->zero_sleep_duration = stepper->now() - start) > max) {
+					max = stepper->zero_sleep_duration;
+				}
 			}
 		}
 
-		// Finally, do a busyloop to precisely sleep up to the
-		// deadline. The code above this loop attempts to reduce the
-		// remaining time to sleep to a minimum via process-yielding
-		// sleeps, so the amount of time spent spinning here is
-		// hopefully quite low.
-		uint64_t current_time;
-		while ((current_time = stepper->now()) < end);
+		step_end: {
+			// Finally, do a busyloop to precisely sleep up to the
+			// deadline. The code above this loop attempts to reduce the
+			// remaining time to sleep to a minimum via process-yielding
+			// sleeps, so the amount of time spent spinning here is
+			// hopefully quite low.
+			uint64_t current_time;
+			while ((current_time = stepper->now()) < end);
 
-		stepper->accumulator += current_time - stepper->sleep_point;
-		stepper->sleep_point = current_time;
-		slept = true;
+			stepper->accumulator += current_time - stepper->sleep_point;
+			stepper->sleep_point = current_time;
+			slept = true;
+		}
 	}
 	else {
 		slept = false;
