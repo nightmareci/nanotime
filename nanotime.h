@@ -58,9 +58,6 @@
 #if defined(_MSC_VER)
 	#if (_MSC_VER < 1600)
 		#error "Current Visual Studio version is not at least Visual Studio 2010, the nanotime library requires at least 2010."
-	#else
-		#define WIN32_LEAN_AND_MEAN
-		#include <Windows.h>
 	#endif
 #elif defined(__cplusplus)
 	#if (__cplusplus < 201103L)
@@ -71,11 +68,7 @@
 		#error "Current C standard is not at least C99, the nanotime library requires at least C99."
 	#endif
 #else
-	#error "Current C or C++ standard is unknown, the nanotime library requires stdint.h to be available (C99 or higher, C++11 or higher, Visual Studio 2010 or higher)."
-#endif
-
-#if defined(__unix__)
-#include <unistd.h>
+	#error "Current C or C++ standard is unknown, the nanotime library requires stdint.h and stdbool.h to be available (C99 or higher, C++11 or higher, Visual Studio 2010 or higher)."
 #endif
 
 #ifdef __cplusplus
@@ -113,7 +106,7 @@ void nanotime_sleep(uint64_t nsec_count);
 #ifdef _MSC_VER
 #define nanotime_yield() YieldProcessor()
 #define NANOTIME_YIELD_IMPLEMENTED
-#elif (defined(__unix__) || defined(__APPLE__)) && (_POSIX_VERSION >= 200112L)
+#elif (defined(__unix__) || defined(__APPLE__) || defined(__MINGW32__) || defined(__MINGW64__)) && (_POSIX_VERSION >= 200112L)
 #include <sched.h>
 #define nanotime_yield() (void)sched_yield()
 #define NANOTIME_YIELD_IMPLEMENTED
@@ -174,6 +167,8 @@ bool nanotime_step(nanotime_step_data* const stepper);
  */
 
 #ifdef _MSC_VER
+#define WIN32_LEAN_AND_MEAN
+#include <Windows.h>
 
 #ifndef NANOTIME_NOW_IMPLEMENTED
 uint64_t nanotime_now() {
@@ -230,8 +225,9 @@ void nanotime_sleep(uint64_t nsec_count) {
 
 #endif
 
-#if defined(__unix__) && !defined(NANOTIME_NOW_IMPLEMENTED)
+#if (defined(__unix__) || defined(__MINGW32__) || defined(__MINGW64__)) && !defined(NANOTIME_NOW_IMPLEMENTED)
 // Current platform is some version of POSIX, that might have clock_gettime.
+#include <unistd.h>
 #if _POSIX_VERSION >= 199309L
 #include <time.h>
 #include <errno.h>
@@ -250,6 +246,7 @@ uint64_t nanotime_now() {
 
 #if (defined(__APPLE__) || defined(__MACH__)) && !defined(NANOTIME_NOW_IMPLEMENTED)
 // Current platform is some Apple operating system, or at least uses some Mach kernel.
+#include <unistd.h>
 #include <sys/time.h>
 #include <mach/clock.h>
 #include <mach/mach.h>
@@ -264,7 +261,8 @@ uint64_t nanotime_now() {
 #define NANOTIME_NOW_IMPLEMENTED
 #endif
 
-#if (defined(__unix__) || (defined(__APPLE__) && defined(__MACH__))) && !defined(NANOTIME_SLEEP_IMPLEMENTED)
+#if (defined(__unix__) || (defined(__APPLE__) && defined(__MACH__)) || defined(__MINGW32__) || defined(__MINGW64__)) && !defined(NANOTIME_SLEEP_IMPLEMENTED)
+#include <unistd.h>
 #include <time.h>
 #include <errno.h>
 void nanotime_sleep(uint64_t nsec_count) {
@@ -315,6 +313,7 @@ void nanotime_sleep(uint64_t nsec_count) {
 #if !defined(NANOTIME_ONLY_STEP) && defined(__cplusplus) && !defined(NANOTIME_YIELD_IMPLEMENTED)
 #include <thread>
 extern "C" void (* const nanotime_yield)() = std::this_thread::yield;
+#define NANOTIME_YIELD_IMPLEMENTED
 #endif
 
 #if !defined(NANOTIME_ONLY_STEP) && defined(__cplusplus) && defined(NANOTIME_IMPLEMENTATION)
