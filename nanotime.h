@@ -110,7 +110,7 @@ void nanotime_sleep(uint64_t nsec_count);
 #include <sched.h>
 #define nanotime_yield() (void)sched_yield()
 #define NANOTIME_YIELD_IMPLEMENTED
-#elif defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 200112L) && !defined(__STDC_NO_THREADS__)
+#elif defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L) && !defined(__STDC_NO_THREADS__)
 #include <threads.h>
 #define nanotime_yield() thrd_yield()
 #define NANOTIME_YIELD_IMPLEMENTED
