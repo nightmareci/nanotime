@@ -310,13 +310,13 @@ void nanotime_sleep(uint64_t nsec_count) {
 }
 #endif
 
-#if !defined(NANOTIME_ONLY_STEP) && defined(__cplusplus) && !defined(NANOTIME_YIELD_IMPLEMENTED)
+#if !defined(NANOTIME_ONLY_STEP) && defined(NANOTIME_IMPLEMENTATION) && defined(__cplusplus)
+
+#if !defined(NANOTIME_YIELD_IMPLEMENTED)
 #include <thread>
 extern "C" void (* const nanotime_yield)() = std::this_thread::yield;
 #define NANOTIME_YIELD_IMPLEMENTED
 #endif
-
-#if !defined(NANOTIME_ONLY_STEP) && defined(__cplusplus) && defined(NANOTIME_IMPLEMENTATION)
 
 #ifndef NANOTIME_NOW_IMPLEMENTED
 #include <cstdint>
@@ -347,7 +347,7 @@ extern "C" void nanotime_sleep(uint64_t nsec_count) {
 
 #endif
 
-#ifdef NANOTIME_IMPLEMENTATION
+#if !defined(NANOTIME_ONLY_STEP) && defined(NANOTIME_IMPLEMENTATION) 
 
 #ifndef NANOTIME_NOW_IMPLEMENTED
 #error "Failed to implement nanotime_now (try using C11 with C11 threads support or C++11)."
