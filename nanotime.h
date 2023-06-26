@@ -84,7 +84,9 @@ extern "C" {
 #ifndef NANOTIME_ONLY_STEP
 
 /*
- * Returns the current time since some unspecified epoch.
+ * Returns the current time since some unspecified epoch. The time values
+ * monotonically increase, so they're not equivalent to calendar time (i.e., no
+ * leap seconds are accounted for, etc.).
  */
 uint64_t nanotime_now();
 
@@ -104,6 +106,7 @@ void nanotime_sleep(uint64_t nsec_count);
  */
 
 #ifdef _MSC_VER
+#include <Windows.h>
 #define nanotime_yield() YieldProcessor()
 #define NANOTIME_YIELD_IMPLEMENTED
 #elif (defined(__unix__) || defined(__APPLE__) || defined(__MINGW32__) || defined(__MINGW64__)) && (_POSIX_VERSION >= 200112L)
@@ -172,9 +175,28 @@ bool nanotime_step(nanotime_step_data* const stepper);
 
 #ifndef NANOTIME_NOW_IMPLEMENTED
 uint64_t nanotime_now() {
+	static uint64_t scale = 0u;
+	static bool multiply;
+	if (scale == 0u) {
+		LARGE_INTEGER frequency;
+		QueryPerformanceFrequency(&frequency);
+		if (frequency.QuadPart < NANOTIME_NSEC_PER_SEC) {
+			scale = NANOTIME_NSEC_PER_SEC / frequency.QuadPart;
+			multiply = true;
+		}
+		else {
+			scale = frequency.QuadPart / NANOTIME_NSEC_PER_SEC;
+			multiply = false;
+		}
+	}
 	LARGE_INTEGER performanceCount;
 	QueryPerformanceCounter(&performanceCount);
-	return performanceCount.QuadPart * UINT64_C(100);
+	if (multiply) {
+		return performanceCount.QuadPart * scale;
+	}
+	else {
+		return performanceCount.QuadPart / scale;
+	}
 }
 #define NANOTIME_NOW_IMPLEMENTED
 #endif
@@ -310,13 +332,13 @@ void nanotime_sleep(uint64_t nsec_count) {
 }
 #endif
 
-#if !defined(NANOTIME_ONLY_STEP) && defined(__cplusplus) && !defined(NANOTIME_YIELD_IMPLEMENTED)
+#if !defined(NANOTIME_ONLY_STEP) && defined(NANOTIME_IMPLEMENTATION) && defined(__cplusplus)
+
+#if !defined(NANOTIME_YIELD_IMPLEMENTED)
 #include <thread>
 extern "C" void (* const nanotime_yield)() = std::this_thread::yield;
 #define NANOTIME_YIELD_IMPLEMENTED
 #endif
-
-#if !defined(NANOTIME_ONLY_STEP) && defined(__cplusplus) && defined(NANOTIME_IMPLEMENTATION)
 
 #ifndef NANOTIME_NOW_IMPLEMENTED
 #include <cstdint>
@@ -347,7 +369,7 @@ extern "C" void nanotime_sleep(uint64_t nsec_count) {
 
 #endif
 
-#ifdef NANOTIME_IMPLEMENTATION
+#if !defined(NANOTIME_ONLY_STEP) && defined(NANOTIME_IMPLEMENTATION) 
 
 #ifndef NANOTIME_NOW_IMPLEMENTED
 #error "Failed to implement nanotime_now (try using C11 with C11 threads support or C++11)."
