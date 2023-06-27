@@ -136,7 +136,9 @@ typedef struct nanotime_step_data {
 	uint64_t (* now)();
 	void (* sleep)(uint64_t nsec_count);
 
+ 	#ifdef __APPLE__
 	uint64_t overhead_duration;
+	#endif
 	uint64_t zero_sleep_duration;
 	uint64_t accumulator;
 	uint64_t sleep_point;
@@ -179,15 +181,28 @@ bool nanotime_step(nanotime_step_data* const stepper);
 
 #ifndef NANOTIME_NOW_IMPLEMENTED
 uint64_t nanotime_now() {
-	static double scale = 0.0;
-	if (scale == 0.0) {
+	static uint64_t scale = UINT64_C(0);
+	static bool multiply;
+	if (scale == 0u) {
 		LARGE_INTEGER frequency;
 		QueryPerformanceFrequency(&frequency);
-		scale = (double)NANOTIME_NSEC_PER_SEC / frequency.QuadPart;
+		if (frequency.QuadPart < NANOTIME_NSEC_PER_SEC) {
+			scale = NANOTIME_NSEC_PER_SEC / frequency.QuadPart;
+			multiply = true;
+		}
+		else {
+			scale = frequency.QuadPart / NANOTIME_NSEC_PER_SEC;
+			multiply = false;
+		}
 	}
 	LARGE_INTEGER performanceCount;
 	QueryPerformanceCounter(&performanceCount);
-	return (uint64_t)(performanceCount.QuadPart * scale);
+	if (multiply) {
+		return performanceCount.QuadPart * scale;
+	}
+	else {
+		return performanceCount.QuadPart / scale;
+	}
 }
 #define NANOTIME_NOW_IMPLEMENTED
 #endif
@@ -418,7 +433,9 @@ void nanotime_step_init(nanotime_step_data* const stepper, const uint64_t sleep_
 	const uint64_t start = now();
 	nanotime_sleep(UINT64_C(0));
 	stepper->zero_sleep_duration = now() - start;
+	#ifdef __APPLE__
 	stepper->overhead_duration = UINT64_C(0);
+	#endif
 	stepper->accumulator = UINT64_C(0);
 
 	// This should be last here, so the sleep point is close to what it
@@ -486,12 +503,14 @@ bool nanotime_step(nanotime_step_data* const stepper) {
 			while (max < stepper->sleep_duration && (start = stepper->now()) + max < end) {
 				stepper->sleep(current_sleep_duration);
 				const uint64_t end_sleep = stepper->now();
+				#ifdef __APPLE__
 				if (end_sleep - start > current_sleep_duration) {
 					stepper->overhead_duration = (end_sleep - start) - current_sleep_duration;
 				}
 				else {
 					stepper->overhead_duration = UINT64_C(0);
 				}
+				#endif
 				uint64_t slept_duration;
 				if ((slept_duration = stepper->now() - start) > max) {
 					max = slept_duration;
