@@ -84,9 +84,13 @@ extern "C" {
 #ifndef NANOTIME_ONLY_STEP
 
 /*
- * Returns the current time since some unspecified epoch. The time values
- * monotonically increase, so they're not equivalent to calendar time (i.e., no
- * leap seconds are accounted for, etc.).
+ * Returns the current time since some unspecified epoch. With the exception of
+ * the standard C11 implementation and non-Apple/Mach kernel POSIX
+ * implementation when neither CLOCK_MONOTONIC_RAW nor CLOCK_MONOTONIC are
+ * available, the time values monotonically increase, so they're not equivalent
+ * to calendar time (i.e., no leap seconds are accounted for, etc.). Calendar
+ * time has to be used as a last resort sometimes, as monotonic time isn't
+ * always available.
  */
 uint64_t nanotime_now();
 
@@ -175,7 +179,7 @@ bool nanotime_step(nanotime_step_data* const stepper);
 
 #ifndef NANOTIME_NOW_IMPLEMENTED
 uint64_t nanotime_now() {
-	static uint64_t scale = 0u;
+	static uint64_t scale = UINT64_C(0);
 	static bool multiply;
 	if (scale == 0u) {
 		LARGE_INTEGER frequency;
@@ -247,6 +251,28 @@ void nanotime_sleep(uint64_t nsec_count) {
 
 #endif
 
+#if (defined(__APPLE__) || defined(__MACH__)) && !defined(NANOTIME_NOW_IMPLEMENTED)
+// The current platform is some Apple operating system, or at least uses some
+// Mach kernel. The POSIX implementation below using clock_gettime works on at
+// least Apple platforms, though this version using Mach functions has lower
+// overhead.
+#include <mach/mach_time.h>
+uint64_t nanotime_now() {
+	static double scale = 0.0;
+	if (scale == 0.0) {
+		mach_timebase_info_data_t info;
+		const kern_return_t status = mach_timebase_info(&info);
+		assert(status == KERN_SUCCESS);
+		if (status != KERN_SUCCESS) {
+			return UINT64_C(0);
+		}
+		scale = (double)info.numer / info.denom;
+	}
+	return (uint64_t)(mach_absolute_time() * scale);
+}
+#define NANOTIME_NOW_IMPLEMENTED
+#endif
+
 #if (defined(__unix__) || defined(__MINGW32__) || defined(__MINGW64__)) && !defined(NANOTIME_NOW_IMPLEMENTED)
 // Current platform is some version of POSIX, that might have clock_gettime.
 #include <unistd.h>
@@ -255,32 +281,38 @@ void nanotime_sleep(uint64_t nsec_count) {
 #include <errno.h>
 uint64_t nanotime_now() {
 	struct timespec now;
-	const int status = clock_gettime(CLOCK_REALTIME, &now);
+	const int status = clock_gettime(
+		#if defined(CLOCK_MONOTONIC_RAW)
+		// Monotonic raw is more precise, but not always available. For the
+		// sorts of applications this code is intended for, mainly soft real
+		// time applications such as game programming, the subtle
+		// inconsistencies of it vs. monotonic aren't an issue.
+		CLOCK_MONOTONIC_RAW
+		#elif defined(CLOCK_MONOTONIC)
+		// Monotonic is quite good, and widely available, but not as precise as
+		// monotonic raw, so it's only used if required.
+		CLOCK_MONOTONIC
+		#else
+		// Realtime isn't fully correct, as it's calendar time, but is even more
+		// widely available than monotonic. Monotonic is only unavailable on
+		// very old platforms though, so old they're likely unused now (as of
+		// last editing this, 2023).
+		CLOCK_REALTIME
+		#endif
+	, &now);
 	assert(status == 0 || (status == -1 && errno != EOVERFLOW));
-	return (uint64_t)now.tv_sec * (uint64_t)NANOTIME_NSEC_PER_SEC + (uint64_t)now.tv_nsec;
+	if (status == 0 || (status == -1 && errno != EOVERFLOW)) {
+		return (uint64_t)now.tv_sec * (uint64_t)NANOTIME_NSEC_PER_SEC + (uint64_t)now.tv_nsec;
+	}
+	else {
+		return UINT64_C(0);
+	}
 }
 #define NANOTIME_NOW_IMPLEMENTED
 
 #else
 #error "Current platform is UNIX/POSIX, but doesn't support required functionality (IEEE Std 1003.1b-1993 is required)."
 #endif
-#endif
-
-#if (defined(__APPLE__) || defined(__MACH__)) && !defined(NANOTIME_NOW_IMPLEMENTED)
-// Current platform is some Apple operating system, or at least uses some Mach kernel.
-#include <unistd.h>
-#include <sys/time.h>
-#include <mach/clock.h>
-#include <mach/mach.h>
-uint64_t nanotime_now() {
-	clock_serv_t clock_serv;
-	mach_timespec_t now;
-	host_get_clock_service(mach_host_self(), CALENDAR_CLOCK, &clock_serv);
-	clock_get_time(clock_serv, &now);
-	mach_port_deallocate(mach_task_self(), clock_serv);
-	return (uint64_t)now.tv_sec * (uint64_t)NANOTIME_NSEC_PER_SEC + (uint64_t)now.tv_nsec;
-}
-#define NANOTIME_NOW_IMPLEMENTED
 #endif
 
 #if (defined(__unix__) || (defined(__APPLE__) && defined(__MACH__)) || defined(__MINGW32__) || defined(__MINGW64__)) && !defined(NANOTIME_SLEEP_IMPLEMENTED)
@@ -305,7 +337,12 @@ uint64_t nanotime_now() {
 	struct timespec now;
 	const int status = timespec_get(&now, TIME_UTC);
 	assert(status == TIME_UTC);
-	return (uint64_t)now.tv_sec * (uint64_t)NANOTIME_NSEC_PER_SEC + (uint64_t)now.tv_nsec;
+	if (status == TIME_UTC) {
+		return (uint64_t)now.tv_sec * (uint64_t)NANOTIME_NSEC_PER_SEC + (uint64_t)now.tv_nsec;
+	}
+	else {
+		return UINT64_C(0);
+	}
 }
 #define NANOTIME_NOW_IMPLEMENTED
 #endif
@@ -346,7 +383,7 @@ extern "C" void (* const nanotime_yield)() = std::this_thread::yield;
 extern "C" uint64_t nanotime_now() {
 	return static_cast<uint64_t>(
 		std::chrono::time_point_cast<std::chrono::nanoseconds>(
-			std::chrono::high_resolution_clock::now()
+			std::chrono::steady_clock::now()
 		).time_since_epoch().count()
 	);
 }

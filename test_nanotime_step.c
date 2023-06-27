@@ -170,7 +170,7 @@ int main(int argc, char** argv) {
 		status = SDL_TryLockMutex(logic_mutex);
 		if (status == 0) {
 			if (logic_data[1].num_updates > UINT64_C(0)) {
-				printf("%.9lfs FPS current, %.9lf FPS average, %.9lf seconds off, accumulated %.9lf seconds\n",
+				printf("%.9fs FPS current, %.9f FPS average, %.9f seconds off, accumulated %.9f seconds\n",
 					(double)NANOTIME_NSEC_PER_SEC / logic_data[1].update_measured,
 					(double)NANOTIME_NSEC_PER_SEC / (logic_data[1].update_sleep_total / logic_data[1].num_updates),
 					logic_data[1].update_measured / (double)NANOTIME_NSEC_PER_SEC - 1.0 / LOGIC_RATE,
