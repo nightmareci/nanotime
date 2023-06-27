@@ -179,28 +179,15 @@ bool nanotime_step(nanotime_step_data* const stepper);
 
 #ifndef NANOTIME_NOW_IMPLEMENTED
 uint64_t nanotime_now() {
-	static uint64_t scale = UINT64_C(0);
-	static bool multiply;
-	if (scale == 0u) {
+	static double scale = 0.0;
+	if (scale == 0.0) {
 		LARGE_INTEGER frequency;
 		QueryPerformanceFrequency(&frequency);
-		if (frequency.QuadPart < NANOTIME_NSEC_PER_SEC) {
-			scale = NANOTIME_NSEC_PER_SEC / frequency.QuadPart;
-			multiply = true;
-		}
-		else {
-			scale = frequency.QuadPart / NANOTIME_NSEC_PER_SEC;
-			multiply = false;
-		}
+		scale = (double)NANOTIME_NSEC_PER_SEC / frequency.QuadPart;
 	}
 	LARGE_INTEGER performanceCount;
 	QueryPerformanceCounter(&performanceCount);
-	if (multiply) {
-		return performanceCount.QuadPart * scale;
-	}
-	else {
-		return performanceCount.QuadPart / scale;
-	}
+	return (uint64_t)(performanceCount.QuadPart * scale);
 }
 #define NANOTIME_NOW_IMPLEMENTED
 #endif
