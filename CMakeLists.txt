@@ -72,7 +72,12 @@ target_link_libraries(test_nanotime_step
 	SDL2::SDL2
 	SDL2::SDL2main
 )
+
 find_library(MATH_LIBRARY m)
 if(NOT "${MATH_LIBRARY}" STREQUAL MATH_LIBRARY-NOTFOUND)
 	target_link_libraries(test_nanotime_step "${MATH_LIBRARY}")
+endif()
+
+if(UNIX OR MINGW)
+	add_compile_definitions(_POSIX_VERSION=200112L)
 endif()

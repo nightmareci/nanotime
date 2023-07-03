@@ -1,3 +1,5 @@
+TODO: Update this readme to the recent API changes.
+
 # nanotime
 A single-header library that provides nanosecond-resolution timestamps, sleeps, and accurate-sleep fixed timestepping for a variety of platforms.
 
@@ -20,10 +22,11 @@ int main() {
     // Get the time after sleeping.
     const uint64_t end = nanotime_now();
 
-    // The nanosecond count duration actually slept can be calculated here via
-    // "end - start". And you can convert that nanosecond count to seconds via
-    // "(end - start) / (double)NANOTIME_NSEC_PER_SEC".
-    printf("Slept: %f seconds\n", (end - start) / (double)NANOTIME_NSEC_PER_SEC);
+    // The nanosecond count duration actually slept can be calculated here with
+    // nanotime_interval; the interval function is recommended, as it properly
+    // handles overflow of time values. And you can convert that nanosecond
+    // count to seconds by dividing by NANOTIME_NSEC_PER_SEC.
+    printf("Slept: %f seconds\n", nanotime_interval(start, end, nanotime_now_max()) / (double)NANOTIME_NSEC_PER_SEC);
 
     return 0;
 }
@@ -46,11 +49,11 @@ An implementation of the [fixed timestep](https://www.gafferongames.com/post/fix
 
 int main() {
     nanotime_step_data stepper;
-    nanotime_step_init(&stepper, NANOTIME_NSEC_PER_SEC / 1000, nanotime_now, nanotime_sleep);
+    nanotime_step_init(&stepper, NANOTIME_NSEC_PER_SEC / 1000, nanotime_now_max(), nanotime_now, nanotime_sleep);
     for (int i = 0; i < 1000; i++) {
         const uint64_t start = stepper.sleep_point;
         nanotime_step(&stepper);
-        const uint64_t duration = stepper.sleep_point - start;
+        const uint64_t duration = nanotime_interval(start, stepper.sleep_point, nanotime_now_max());
         printf("Slept %f seconds\n", (double)duration / NANOTIME_NSEC_PER_SEC);
     }
 
@@ -69,6 +72,8 @@ If you want to omit the processor yield function and use alternative timestamp a
 #include "SDL.h"
 // ...
     nanotime_step_data stepper;
-    nanotime_step_init(&stepper, NANOTIME_NSEC_PER_SEC / 60, SDL_GetTicksNS, SDL_DelayNS);
+    // SDL3 errors out if the time values overflow, so using UINT64_MAX for the
+    // maximum timestamp value is appropriate.
+    nanotime_step_init(&stepper, NANOTIME_NSEC_PER_SEC / 60, UINT64_MAX, SDL_GetTicksNS, SDL_DelayNS);
 // ...
 ```

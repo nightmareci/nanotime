@@ -84,12 +84,12 @@ struct {
 
 int SDLCALL update_logic(void* data) {
 	nanotime_step_data stepper;
-	nanotime_step_init(&stepper, (uint64_t)(NANOTIME_NSEC_PER_SEC / LOGIC_RATE), nanotime_now, nanotime_sleep);
+	nanotime_step_init(&stepper, (uint64_t)(NANOTIME_NSEC_PER_SEC / LOGIC_RATE), nanotime_now_max(), nanotime_now, nanotime_sleep);
 	while (!SDL_AtomicGet(&quit_now)) {
 		const uint64_t last_sleep_point = stepper.sleep_point;
 		nanotime_step(&stepper);
 
-		logic_data[0].update_measured = stepper.sleep_point - last_sleep_point;
+		logic_data[0].update_measured = nanotime_interval(last_sleep_point, stepper.sleep_point, nanotime_now_max());
 		logic_data[0].update_sleep_total += logic_data[0].update_measured;
 		logic_data[0].accumulator = stepper.accumulator;
 		logic_data[0].num_updates++;
@@ -140,7 +140,7 @@ int main(int argc, char** argv) {
 	}
 
 	nanotime_step_data stepper;
-	nanotime_step_init(&stepper, (uint64_t)(NANOTIME_NSEC_PER_SEC / FRAME_RATE), nanotime_now, nanotime_sleep);
+	nanotime_step_init(&stepper, (uint64_t)(NANOTIME_NSEC_PER_SEC / FRAME_RATE), nanotime_now_max(), nanotime_now, nanotime_sleep);
 
 	// The SDL2 documentation says that for maximally-portable code, video
 	// and events should be handled only in the main thread. Additionally,
@@ -170,11 +170,11 @@ int main(int argc, char** argv) {
 		status = SDL_TryLockMutex(logic_mutex);
 		if (status == 0) {
 			if (logic_data[1].num_updates > UINT64_C(0)) {
-				printf("%.9fs FPS current, %.9f FPS average, %.9f seconds off, accumulated %.9f seconds\n",
-					(double)NANOTIME_NSEC_PER_SEC / logic_data[1].update_measured,
-					(double)NANOTIME_NSEC_PER_SEC / (logic_data[1].update_sleep_total / logic_data[1].num_updates),
-					logic_data[1].update_measured / (double)NANOTIME_NSEC_PER_SEC - 1.0 / LOGIC_RATE,
-					logic_data[1].accumulator / (double)NANOTIME_NSEC_PER_SEC
+				printf("%" PRIu64 " ns/frame current, %" PRIu64 " ns/frame average, %" PRId64 " ns off, accumulated %" PRIu64 " ns\n",
+					logic_data[1].update_measured,
+					logic_data[1].update_sleep_total / logic_data[1].num_updates,
+					(int64_t)logic_data[1].update_measured - (int64_t)(NANOTIME_NSEC_PER_SEC / LOGIC_RATE),
+					logic_data[1].accumulator
 				);
 				fflush(stdout);
 			}

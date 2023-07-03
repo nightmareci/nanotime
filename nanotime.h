@@ -79,7 +79,7 @@ extern "C" {
 #include <stdbool.h>
 #include <assert.h>
 
-#define NANOTIME_NSEC_PER_SEC 1000000000L
+#define NANOTIME_NSEC_PER_SEC UINT64_C(1000000000)
 
 #ifndef NANOTIME_ONLY_STEP
 
@@ -93,6 +93,14 @@ extern "C" {
  * always available.
  */
 uint64_t nanotime_now();
+
+/*
+ * Returns the maximum possible timestamp value. Use of this value is required
+ * to properly handle overflow of timestamp values, such as when calculating the
+ * interval between a time value before overflow and the next time value after
+ * overflow.
+ */
+uint64_t nanotime_now_max();
 
 /*
  * Sleeps the current thread for the requested count of nanoseconds. The slept
@@ -131,13 +139,25 @@ extern void (* const nanotime_yield)();
 
 #endif
 
+/*
+ * Calculates the time interval between two nanosecond time values, correctly
+ * handling the case when the end time value overflows past max. You should
+ * probably use this function when calculating time intervals, as not all
+ * platforms' maximum timestamp value is UINT64_MAX, which is required for the
+ * trivial "end - start" formula for interval calculation to work as expected.
+ */
+uint64_t nanotime_interval(const uint64_t start, const uint64_t end, const uint64_t max);
+
 typedef struct nanotime_step_data {
 	uint64_t sleep_duration;
+	uint64_t now_max;
 	uint64_t (* now)();
 	void (* sleep)(uint64_t nsec_count);
 
  	#ifdef __APPLE__
-	uint64_t overhead_duration;
+	uint64_t overhead_numer;
+	uint64_t overhead_denom;
+	uint64_t backoff;
 	#endif
 	uint64_t zero_sleep_duration;
 	uint64_t accumulator;
@@ -148,7 +168,7 @@ typedef struct nanotime_step_data {
  * Initializes the nanotime precise fixed timestep object. Call immediately
  * before entering the loop using the stepper object.
  */
-void nanotime_step_init(nanotime_step_data* const stepper, const uint64_t sleep_duration, uint64_t (* const now)(), void (* const sleep)(uint64_t nsec_count));
+void nanotime_step_init(nanotime_step_data* const stepper, const uint64_t sleep_duration, const uint64_t now_max, uint64_t (* const now)(), void (* const sleep)(uint64_t nsec_count));
 
 /*
  * Does one step of sleeping for a fixed timestep logic update cycle. It makes
@@ -159,14 +179,6 @@ void nanotime_step_init(nanotime_step_data* const stepper, const uint64_t sleep_
  */
 bool nanotime_step(nanotime_step_data* const stepper);
 
-#ifdef _MSC_VER
-#define NANOTIME_RESOLUTION UINT64_C(100)
-
-#else
-#define NANOTIME_RESOLUTION UINT64_C(1)
-
-#endif
-
 #if !defined(NANOTIME_ONLY_STEP) && defined(NANOTIME_IMPLEMENTATION)
 
 /*
@@ -176,6 +188,7 @@ bool nanotime_step(nanotime_step_data* const stepper);
  */
 
 #ifdef _MSC_VER
+
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 
@@ -207,11 +220,29 @@ uint64_t nanotime_now() {
 #define NANOTIME_NOW_IMPLEMENTED
 #endif
 
+#ifndef NANOTIME_NOW_MAX_IMPLEMENTED
+uint64_t nanotime_now_max() {
+	static uint64_t now_max;
+	if (now_max == UINT64_C(0)) {
+		LARGE_INTEGER frequency;
+		QueryPerformanceFrequency(&frequency);
+		if (frequency.QuadPart < NANOTIME_NSEC_PER_SEC) {
+			now_max = UINT64_MAX * (NANOTIME_NSEC_PER_SEC / frequency.QuadPart);
+		}
+		else {
+			now_max = UINT64_MAX / (frequency.QuadPart / NANOTIME_NSEC_PER_SEC);
+		}
+	}
+	return now_max;
+}
+#define NANOTIME_NOW_MAX_IMPLEMENTED
+#endif
+
 #ifndef NANOTIME_SLEEP_IMPLEMENTED
 void nanotime_sleep(uint64_t nsec_count) {
 	LARGE_INTEGER dueTime;
 
-	if (nsec_count < NANOTIME_RESOLUTION) {
+	if (nsec_count < UINT64_C(100)) {
 		/*
 		 * Allows the OS to schedule another process for a single time
 		 * slice. Better than a delay of 0, which immediately returns
@@ -253,26 +284,48 @@ void nanotime_sleep(uint64_t nsec_count) {
 
 #endif
 
-#if (defined(__APPLE__) || defined(__MACH__)) && !defined(NANOTIME_NOW_IMPLEMENTED)
+#if defined(__APPLE__) || defined(__MACH__)
+
+#ifndef NANOTIME_NOW_IMPLEMENTED
 // The current platform is some Apple operating system, or at least uses some
 // Mach kernel. The POSIX implementation below using clock_gettime works on at
 // least Apple platforms, though this version using Mach functions has lower
 // overhead.
 #include <mach/mach_time.h>
 uint64_t nanotime_now() {
-	static double scale = 0.0;
-	if (scale == 0.0) {
+	static mach_timebase_info_data_t info = { 0 };
+	if (info.denom == UINT32_C(0)) {
+		const kern_return_t status = mach_timebase_info(&info);
+		assert(status == KERN_SUCCESS);
+		if (status != KERN_SUCCESS) {
+			return UINT64_C(0);
+		}
+	}
+	return (mach_absolute_time() * info.numer) / info.denom;
+}
+#define NANOTIME_NOW_IMPLEMENTED
+#endif
+
+#ifndef NANOTIME_NOW_MAX_IMPLEMENTED
+#include <mach/mach_time.h>
+uint64_t nanotime_now_max() {
+	static uint64_t now_max = UINT64_C(0);
+	if (now_max == UINT64_C(0)) {
 		mach_timebase_info_data_t info;
 		const kern_return_t status = mach_timebase_info(&info);
 		assert(status == KERN_SUCCESS);
 		if (status != KERN_SUCCESS) {
 			return UINT64_C(0);
 		}
-		scale = (double)info.numer / info.denom;
+		else {
+			now_max = UINT64_MAX / info.denom;
+		}
 	}
-	return (uint64_t)(mach_absolute_time() * scale);
+	return now_max;
 }
-#define NANOTIME_NOW_IMPLEMENTED
+#define NANOTIME_NOW_MAX_IMPLEMENTED
+#endif
+
 #endif
 
 #if (defined(__unix__) || defined(__MINGW32__) || defined(__MINGW64__)) && !defined(NANOTIME_NOW_IMPLEMENTED)
@@ -304,7 +357,7 @@ uint64_t nanotime_now() {
 	, &now);
 	assert(status == 0 || (status == -1 && errno != EOVERFLOW));
 	if (status == 0 || (status == -1 && errno != EOVERFLOW)) {
-		return (uint64_t)now.tv_sec * (uint64_t)NANOTIME_NSEC_PER_SEC + (uint64_t)now.tv_nsec;
+		return (uint64_t)now.tv_sec * NANOTIME_NSEC_PER_SEC + (uint64_t)now.tv_nsec;
 	}
 	else {
 		return UINT64_C(0);
@@ -313,7 +366,7 @@ uint64_t nanotime_now() {
 #define NANOTIME_NOW_IMPLEMENTED
 
 #else
-#error "Current platform is UNIX/POSIX, but doesn't support required functionality (IEEE Std 1003.1b-1993 is required)."
+#error "Current platform is UNIX/POSIX, but doesn't support required functionality (IEEE Std 1003.1b-1993 is required; #define _POSIX_VERSION as 199309L or higher)."
 #endif
 #endif
 
@@ -340,7 +393,7 @@ uint64_t nanotime_now() {
 	const int status = timespec_get(&now, TIME_UTC);
 	assert(status == TIME_UTC);
 	if (status == TIME_UTC) {
-		return (uint64_t)now.tv_sec * (uint64_t)NANOTIME_NSEC_PER_SEC + (uint64_t)now.tv_nsec;
+		return (uint64_t)now.tv_sec * NANOTIME_NSEC_PER_SEC + (uint64_t)now.tv_nsec;
 	}
 	else {
 		return UINT64_C(0);
@@ -425,16 +478,51 @@ extern "C" void nanotime_sleep(uint64_t nsec_count) {
 extern "C" {
 #endif
 
-void nanotime_step_init(nanotime_step_data* const stepper, const uint64_t sleep_duration, uint64_t (* const now)(), void (* const sleep)(uint64_t nsec_count)) {
+#ifndef NANOTIME_NOW_MAX_IMPLEMENTED
+// Might not be correct on some platforms, but it's the best we can do as a last
+// resort.
+uint64_t nanotime_now_max() {
+	return UINT64_MAX;
+}
+#define NANOTIME_NOW_MAX_IMPLEMENTED
+#endif
+
+uint64_t nanotime_interval(const uint64_t start, const uint64_t end, const uint64_t max) {
+	assert(
+		max > UINT64_C(0) &&
+		start <= max &&
+		end <= max
+	);
+
+	if (end >= start) {
+		return end - start;
+	}
+	else {
+		return end + (max - start) + UINT64_C(1);
+	}
+}
+
+void nanotime_step_init(nanotime_step_data* const stepper, const uint64_t sleep_duration, const uint64_t now_max, uint64_t (* const now)(), void (* const sleep)(uint64_t nsec_count)) {
+	assert(
+		stepper != NULL &&
+		sleep_duration > UINT64_C(0) &&
+		now_max > UINT64_C(0) &&
+		now != NULL &&
+		sleep != NULL
+	);
+
 	stepper->sleep_duration = sleep_duration;
+	stepper->now_max = now_max;
 	stepper->now = now;
 	stepper->sleep = sleep;
 
 	const uint64_t start = now();
 	nanotime_sleep(UINT64_C(0));
-	stepper->zero_sleep_duration = now() - start;
+	stepper->zero_sleep_duration = nanotime_interval(start, now(), now_max);
 	#ifdef __APPLE__
-	stepper->overhead_duration = UINT64_C(0);
+	stepper->overhead_numer = UINT64_C(1);
+	stepper->overhead_denom = UINT64_C(1);
+	stepper->backoff = UINT64_C(0);
 	#endif
 	stepper->accumulator = UINT64_C(0);
 
@@ -444,75 +532,95 @@ void nanotime_step_init(nanotime_step_data* const stepper, const uint64_t sleep_
 }
 
 bool nanotime_step(nanotime_step_data* const stepper) {
+	assert(stepper != NULL);
+
 	bool slept;
 	if (stepper->accumulator < stepper->sleep_duration) {
-		uint64_t current_sleep_duration = stepper->sleep_duration - stepper->accumulator;
-		const uint64_t end = stepper->sleep_point + current_sleep_duration;
+		const uint64_t total_sleep_duration = stepper->sleep_duration - stepper->accumulator;
+		uint64_t current_sleep_duration = total_sleep_duration;
 		const uint64_t shift = UINT64_C(4);
 
 		#ifdef __APPLE__
-		// Start with a big sleep. This helps reduce CPU/power use on
-		// macOS vs. many shorter sleeps. Shorter sleeps are still done
-		// below, but this reduces the number of shorter sleeps. The
-		// overhead multiplier helps reduce the frequency of
-		// overshooting the target end time.
+		// Start with a big sleep. This helps reduce CPU/power use vs. many
+		// shorter sleeps. Shorter sleeps are still done below, but this reduces
+		// the number of shorter sleeps. It appears that the actually-slept
+		// duration is roughly equal to the requested delay time multiplied by a
+		// factor that remains relatively constant over the short run, greater
+		// than 1.0, in testing on ARM macOS; such behavior doesn't appear to be
+		// the case on all platforms, but is the case in testing on an M1 Mac.
+		// By only setting the overhead factor when the sleep overshoots, it
+		// levels off to a pretty stable value in a feedback loop, resulting in
+		// the big sleep approaching a value that does as big as possible of a
+		// big sleep while reducing overshoots.  Also, a "backoff" duration is
+		// subtracted from the overhead factor-adjusted sleep duration, which
+		// reduces the frequency of overshoots, while still maintaining the
+		// desired longer sleep duration before the higher cost/higher precision
+		// sleeping below; the backoff duration is also updated in a feedback
+		// loop that causes it to approach a reasonably correct value.
+		// TODO: This was carefully tuned to be well-behaved on Apple Silicon
+		// M1, but hasn't been tested on any Intel Mac; test on an Intel Mac to
+		// see if this algorithm is appropriate there, if not, special-case for
+		// each CPU type.
+		// TODO: Implement "initial big sleep" for other platforms; it really
+		// does reduce wasted cycles regardless of platform. Or, if this
+		// algorithm seems to work fine on other platforms, change it to be used
+		// on all platforms, not just Apple's.
+		uint64_t overhead_sleep_duration = (current_sleep_duration * stepper->overhead_numer) / stepper->overhead_denom;
+		if (overhead_sleep_duration > stepper->backoff) {
+			overhead_sleep_duration -= stepper->backoff;
+		}
+		else {
+			stepper->backoff = UINT64_C(0);
+		}
 		const uint64_t overhead_start = stepper->now();
-		// TODO: This was carefully tuned to be well-behaved on Apple
-		// Silicon M1, but hasn't been tested on any Intel Mac; test on
-		// an Intel Mac to see if this multiplier is appropriate there,
-		// if not, special-case for each CPU type.
-		const uint64_t overhead_multiplier = UINT64_C(100);
-		if (current_sleep_duration > stepper->overhead_duration * overhead_multiplier) {
-			const uint64_t overhead_sleep_duration = current_sleep_duration - stepper->overhead_duration * overhead_multiplier;
-			stepper->sleep(overhead_sleep_duration);
-			const uint64_t overhead_end = stepper->now();
-			if (overhead_end - overhead_start > overhead_sleep_duration) {
-				stepper->overhead_duration = (overhead_end - overhead_start) - overhead_sleep_duration;
+		stepper->sleep(overhead_sleep_duration);
+		const uint64_t big_sleep_duration = nanotime_interval(overhead_start, stepper->now(), stepper->now_max);
+		const uint64_t slept_so_far = nanotime_interval(stepper->sleep_point, stepper->now(), stepper->now_max);
+		if (slept_so_far <= total_sleep_duration) {
+			if (stepper->backoff >= total_sleep_duration - slept_so_far) {
+				stepper->backoff -= total_sleep_duration - slept_so_far;
 			}
-			else {
-				stepper->overhead_duration = UINT64_C(0);
-			}
+			current_sleep_duration -= slept_so_far;
 		}
 		else {
-			stepper->overhead_duration = UINT64_C(0);
-		}
-
-		if (stepper->now() - overhead_start < current_sleep_duration && stepper->now() < end) {
-			current_sleep_duration -= stepper->now() - overhead_start;
-		}
-		else {
+			stepper->overhead_numer = overhead_sleep_duration;
+			stepper->overhead_denom = big_sleep_duration > UINT64_C(0) ? big_sleep_duration : UINT64_C(1);
+			if (stepper->backoff <= UINT64_MAX - slept_so_far - total_sleep_duration) {
+				stepper->backoff += slept_so_far - total_sleep_duration;
+			}
+			if (stepper->overhead_numer > stepper->overhead_denom) {
+				stepper->overhead_numer = UINT64_C(1);
+				stepper->overhead_denom = UINT64_C(1);
+			}
 			goto step_end;
 		}
 		#endif
 
-		// This has the flavor of Zeno's dichotomous paradox of motion,
-		// as it successively divides the time remaining to sleep, but
-		// attempts to stop short of the deadline to hopefully be able
-		// to precisely sleep up to the deadline below this loop. The
-		// divisor is larger than two though, as it produces better
-		// behavior, and seems to work fine in testing on real
-		// hardware.
+		// This has the flavor of Zeno's dichotomous paradox of motion, as it
+		// successively divides the time remaining to sleep, but attempts to
+		// stop short of the deadline to hopefully be able to precisely sleep up
+		// to the deadline below this loop. The divisor is larger than two
+		// though, as it produces better behavior, and seems to work fine in
+		// testing on real hardware. This loop, and the one below, take the
+		// assumption that sleep requests of the same amount are roughly equal;
+		// by keeping track of the max of all the sleeps, the loops can be
+		// broken out of when the remaining time is less than the max, allowing
+		// the loop after this one to do shorter sleeps, with a corresponding
+		// smaller max of the sleeps. The overshoot possible in the loop below
+		// this one won't overshoot much, or in the best case won't overshoot so
+		// the busyloop can finish up the sleep precisely.
 		current_sleep_duration >>= shift;
 		for (
 			uint64_t max = stepper->zero_sleep_duration;
-			stepper->now() + max < end && current_sleep_duration > UINT64_C(0);
+			nanotime_interval(stepper->sleep_point, stepper->now(), stepper->now_max) + max < total_sleep_duration && current_sleep_duration > UINT64_C(0);
 			current_sleep_duration >>= shift
 		) {
 			max = stepper->zero_sleep_duration;
 			uint64_t start;
-			while (max < stepper->sleep_duration && (start = stepper->now()) + max < end) {
+			while (max < stepper->sleep_duration && nanotime_interval(stepper->sleep_point, start = stepper->now(), stepper->now_max) + max < total_sleep_duration) {
 				stepper->sleep(current_sleep_duration);
-				const uint64_t end_sleep = stepper->now();
-				#ifdef __APPLE__
-				if (end_sleep - start > current_sleep_duration) {
-					stepper->overhead_duration = (end_sleep - start) - current_sleep_duration;
-				}
-				else {
-					stepper->overhead_duration = UINT64_C(0);
-				}
-				#endif
 				uint64_t slept_duration;
-				if ((slept_duration = stepper->now() - start) > max) {
+				if ((slept_duration = nanotime_interval(start, stepper->now(), stepper->now_max)) > max) {
 					max = slept_duration;
 				}
 			}
@@ -520,31 +628,35 @@ bool nanotime_step(nanotime_step_data* const stepper) {
 
 		{
 			// After (hopefully) stopping short of the deadline by a small
-			// amount, do small sleeps here to get closer to the deadline,
-			// but again attempting to stop short by an even smaller
-			// amount. It's best to do larger sleeps as done in the above
-			// loop, to reduce CPU/power usage, as each sleep call has a
-			// CPU/power usage cost.
+			// amount, do small sleeps here to get closer to the deadline, but
+			// again attempting to stop short by an even smaller amount. It's
+			// best to do larger sleeps as done in the above loop, to reduce
+			// CPU/power usage, as each sleep iteration has a CPU/power usage
+			// cost.
 			uint64_t max = stepper->zero_sleep_duration;
 			uint64_t start;
-			while ((start = stepper->now()) + max < end) {
+			while (nanotime_interval(stepper->sleep_point, start = stepper->now(), stepper->now_max) + max < total_sleep_duration) {
 				stepper->sleep(UINT64_C(0));
-				if ((stepper->zero_sleep_duration = stepper->now() - start) > max) {
+				if ((stepper->zero_sleep_duration = nanotime_interval(start, stepper->now(), stepper->now_max)) > max) {
 					max = stepper->zero_sleep_duration;
 				}
 			}
 		}
 
-		step_end: {
+		#ifdef __APPLE__
+		step_end:
+		#endif
+		{
 			// Finally, do a busyloop to precisely sleep up to the
 			// deadline. The code above this loop attempts to reduce the
 			// remaining time to sleep to a minimum via process-yielding
 			// sleeps, so the amount of time spent spinning here is
 			// hopefully quite low.
 			uint64_t current_time;
-			while ((current_time = stepper->now()) < end);
+			uint64_t accumulated;
+			while ((accumulated = nanotime_interval(stepper->sleep_point, current_time = stepper->now(), stepper->now_max)) < total_sleep_duration);
 
-			stepper->accumulator += current_time - stepper->sleep_point;
+			stepper->accumulator += accumulated;
 			stepper->sleep_point = current_time;
 			slept = true;
 		}
