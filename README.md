@@ -1,5 +1,3 @@
-TODO: Update this readme to the recent API changes.
-
 # nanotime
 A single-header library that provides nanosecond-resolution timestamps, sleeps, and accurate-sleep fixed timestepping for a variety of platforms.
 
