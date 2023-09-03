@@ -75,6 +75,15 @@
 extern "C" {
 #endif
 
+/*
+ * Implementor's note: This library directly uses Win32 APIs both for MSVC and
+ * MinGW GCC, as they work for both, and produce better behavior in MinGW
+ * builds. Detection of them is accomplished via checking if _WIN32 is defined,
+ * as it's defined in both MSVC and MinGW GCC. Though it's convenient to have
+ * UNIX-like APIs on Windows provided by MinGW, they just aren't as good as
+ * directly using Win32 APIs on Windows.
+ */
+
 #include <stdint.h>
 #include <stdbool.h>
 #include <assert.h>
@@ -117,11 +126,17 @@ void nanotime_sleep(uint64_t nsec_count);
  * unknown platforms, the function is defined as a no-op.
  */
 
-#ifdef _MSC_VER
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <Windows.h>
 #define nanotime_yield() YieldProcessor()
 #define NANOTIME_YIELD_IMPLEMENTED
-#elif (defined(__unix__) || defined(__APPLE__) || defined(__MINGW32__) || defined(__MINGW64__)) && (_POSIX_VERSION >= 200112L)
+#elif (defined(__unix__) || defined(__APPLE__)) && defined(_POSIX_VERSION) && (_POSIX_VERSION >= 200112L)
 #include <sched.h>
 #define nanotime_yield() (void)sched_yield()
 #define NANOTIME_YIELD_IMPLEMENTED
@@ -187,9 +202,14 @@ bool nanotime_step(nanotime_step_data* const stepper);
  * resort.
  */
 
-#ifdef _MSC_VER
+#ifdef _WIN32
 
+#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <Windows.h>
 
 #ifndef NANOTIME_NOW_IMPLEMENTED
@@ -328,10 +348,9 @@ uint64_t nanotime_now_max() {
 
 #endif
 
-#if (defined(__unix__) || defined(__MINGW32__) || defined(__MINGW64__)) && !defined(NANOTIME_NOW_IMPLEMENTED)
+#if defined(__unix__) && defined(_POSIX_VERSION) && (_POSIX_VERSION >= 199309L) && !defined(NANOTIME_NOW_IMPLEMENTED)
 // Current platform is some version of POSIX, that might have clock_gettime.
 #include <unistd.h>
-#if _POSIX_VERSION >= 199309L
 #include <time.h>
 #include <errno.h>
 uint64_t nanotime_now() {
@@ -365,9 +384,6 @@ uint64_t nanotime_now() {
 }
 #define NANOTIME_NOW_IMPLEMENTED
 
-#else
-#error "Current platform is UNIX/POSIX, but doesn't support required functionality (IEEE Std 1003.1b-1993 is required; #define _POSIX_VERSION as 199309L or higher)."
-#endif
 #endif
 
 #if (defined(__unix__) || (defined(__APPLE__) && defined(__MACH__)) || defined(__MINGW32__) || defined(__MINGW64__)) && !defined(NANOTIME_SLEEP_IMPLEMENTED)

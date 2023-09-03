@@ -56,6 +56,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <inttypes.h>
 #include <math.h>
 
 #define NANOTIME_IMPLEMENTATION

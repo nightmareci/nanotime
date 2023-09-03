@@ -2,4 +2,5 @@
 /.vs
 /out
 /CMakeSettings.json
+/CMakeLists.txt.user
 /.vscode
