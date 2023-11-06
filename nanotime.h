@@ -419,6 +419,24 @@ uint64_t nanotime_now() {
 #endif
 #endif
 
+#if defined(__vita__)
+#ifndef NANOTIME_SLEEP_IMPLEMENTED
+#include <psp2/kernel/processmgr.h>
+void nanotime_sleep(uint64_t nsec_count) {
+	sceKernelDelayThreadCB(nsec_count / UINT64_C(1000));
+}
+#define NANOTIME_SLEEP_IMPLEMENTED
+#endif
+
+#ifndef NANOTIME_NOW_IMPLEMENTED
+#include <psp2/kernel/processmgr.h>
+uint64_t nanotime_now() {
+	return sceKernelGetProcessTimeWide() * UINT64_C(1000);
+}
+#define NANOTIME_NOW_IMPLEMENTED
+#endif
+#endif
+
 #ifndef NANOTIME_SLEEP_IMPLEMENTED
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L) && !defined(__STDC_NO_THREADS__)
 #include <threads.h>
