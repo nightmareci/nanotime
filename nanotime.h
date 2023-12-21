@@ -395,7 +395,10 @@ void nanotime_sleep(uint64_t nsec_count) {
 		.tv_sec = (time_t)(nsec_count / NANOTIME_NSEC_PER_SEC),
 		.tv_nsec = (long)(nsec_count % NANOTIME_NSEC_PER_SEC)
 	};
-	const int status = nanosleep(&req, NULL);
+#ifndef NDEBUG
+	const int status =
+#endif
+	nanosleep(&req, NULL);
 	assert(status == 0 || (status == -1 && errno != EINVAL));
 }
 #define NANOTIME_SLEEP_IMPLEMENTED
