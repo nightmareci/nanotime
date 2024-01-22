@@ -86,7 +86,7 @@ endif()
 
 find_library(MATH_LIBRARY m)
 if(NOT "${MATH_LIBRARY}" STREQUAL MATH_LIBRARY-NOTFOUND)
-	target_link_libraries(test_nanotime_step "${MATH_LIBRARY}")
+	target_link_libraries(test_nanotime_step PRIVATE "${MATH_LIBRARY}")
 endif()
 
 if(UNIX)

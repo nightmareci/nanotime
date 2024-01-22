@@ -146,6 +146,10 @@ void nanotime_sleep(uint64_t nsec_count);
 #define NANOTIME_YIELD_IMPLEMENTED
 #elif defined(__cplusplus)
 extern void (* const nanotime_yield)();
+#elif defined(__SWITCH__)
+#include <switch.h>
+#define nanotime_yield() svcSleepThread(YieldType_ToAnyThread)
+#define NANOTIME_YIELD_IMPLEMENTED
 #else
 #define nanotime_yield()
 #define NANOTIME_YIELD_NOP
@@ -404,24 +408,6 @@ void nanotime_sleep(uint64_t nsec_count) {
 #define NANOTIME_SLEEP_IMPLEMENTED
 #endif
 
-#ifndef NANOTIME_NOW_IMPLEMENTED
-#if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
-#include <time.h>
-uint64_t nanotime_now() {
-	struct timespec now;
-	const int status = timespec_get(&now, TIME_UTC);
-	assert(status == TIME_UTC);
-	if (status == TIME_UTC) {
-		return (uint64_t)now.tv_sec * NANOTIME_NSEC_PER_SEC + (uint64_t)now.tv_nsec;
-	}
-	else {
-		return UINT64_C(0);
-	}
-}
-#define NANOTIME_NOW_IMPLEMENTED
-#endif
-#endif
-
 #if defined(__vita__)
 #ifndef NANOTIME_SLEEP_IMPLEMENTED
 #include <psp2/kernel/processmgr.h>
@@ -458,6 +444,49 @@ void nanotime_sleep(uint64_t nsec_count) {
 uint64_t nanotime_now() {
 	const double now = emscripten_get_now();
 	return (uint64_t)now * UINT64_C(1000000);
+}
+#define NANOTIME_NOW_IMPLEMENTED
+#endif
+#endif
+
+#ifdef __SWITCH__
+#ifndef NANOTIME_SLEEP_IMPLEMENTED
+#include <switch.h>
+void nanotime_sleep(uint64_t nsec_count) {
+	if (nsec_count > INT64_MAX) {
+		svcSleepThread(INT64_MAX);
+	}
+	else {
+		svcSleepThread((s64)nsec_count);
+	}
+}
+#define NANOTIME_SLEEP_IMPLEMENTED
+#endif
+
+#ifndef NANOTIME_NOW_IMPLEMENTED
+#define NANOTIME_NOW_IMPLEMENTED
+#include <switch.h>
+uint64_t nanotime_now() {
+	return svcGetSystemTick();
+}
+#define NANOTIME_NOW_IMPLEMENTED
+#endif
+#endif
+
+
+#ifndef NANOTIME_NOW_IMPLEMENTED
+#if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
+#include <time.h>
+uint64_t nanotime_now() {
+	struct timespec now;
+	const int status = timespec_get(&now, TIME_UTC);
+	assert(status == TIME_UTC);
+	if (status == TIME_UTC) {
+		return (uint64_t)now.tv_sec * NANOTIME_NSEC_PER_SEC + (uint64_t)now.tv_nsec;
+	}
+	else {
+		return UINT64_C(0);
+	}
 }
 #define NANOTIME_NOW_IMPLEMENTED
 #endif
