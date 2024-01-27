@@ -66,6 +66,11 @@ add_executable(test_nanotime_sleep_cpp test_nanotime_sleep.cpp nanotime.h)
 add_executable(test_nanotime_sleep_c test_nanotime_sleep.c nanotime.h)
 add_executable(test_nanotime_step test_nanotime_step.c nanotime.h)
 
+option(MULTITHREADED "Make the test_nanotime_step program use multithreading.")
+if(MULTITHREADED)
+	target_compile_definitions(test_nanotime_step PRIVATE MULTITHREADED TRUE)
+endif()
+
 if(MINGW)
 	find_package(PkgConfig REQUIRED)
 	pkg_check_modules(SDL2 REQUIRED IMPORTED_TARGET SDL2)

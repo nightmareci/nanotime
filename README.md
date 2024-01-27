@@ -59,7 +59,7 @@ int main() {
 }
 ```
 
-An example C/SDL2 program is provided, demonstrating how the timestep feature can be integrated into games; the example C/SDL2 program requires C11.
+An example C/SDL2 program is provided, `test_nanotime_step`, demonstrating how the timestep feature can be integrated into games; the example C/SDL2 program requires C11. The example program has a CMake option, `MULTITHREADED`, that makes that example program have separate logic and render threads; it's enabled by default.
 
 If you want to omit the processor yield function and use alternative timestamp and sleep functions, you can `#define NANOTIME_ONLY_STEP` before including `nanotime.h`; by omitting the timestamp and sleep functions, you can use the timestep feature when the timestamp and sleep functions aren't available on your target platform(s), or if you don't wish to use the included timestamp and sleep functions in lieu of others. The timestep feature doesn't use platform-specific features, so its support matrix is simpler, requiring C99 or higher, C++11 or higher, or Visual Studio 2010 or higher:
 ```c

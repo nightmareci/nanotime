@@ -56,7 +56,6 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include <inttypes.h>
 #include <math.h>
 
 #define NANOTIME_IMPLEMENTATION
@@ -67,9 +66,10 @@
 
 #define FRAME_RATE 120.0
 
-SDL_atomic_t quit_now;
+static SDL_atomic_t quit_now;
 
-SDL_mutex* logic_mutex;
+static SDL_mutex* logic_mutex;
+
 /*
  * logic_data[0] is owned by the logic thread and doesn't need locking,
  * logic_data[1] is shared so must be locked, but try-lock is used for
@@ -83,26 +83,31 @@ struct {
 	uint64_t num_updates;
 } logic_data[2] = {0};
 
-int SDLCALL update_logic(void* data) {
+static void update_logic(const uint64_t last_sleep_point, nanotime_step_data* const stepper) {
+	logic_data[0].update_measured = nanotime_interval(last_sleep_point, stepper->sleep_point, nanotime_now_max());
+	logic_data[0].update_sleep_total += logic_data[0].update_measured;
+	logic_data[0].accumulator = stepper->accumulator;
+	logic_data[0].num_updates++;
+
+	if (SDL_TryLockMutex(logic_mutex) == 0) {
+		logic_data[1] = logic_data[0];
+		SDL_UnlockMutex(logic_mutex);
+	}
+}
+
+#ifdef MULTITHREADED
+static int SDLCALL update_logic_thread_function(void* data) {
 	nanotime_step_data stepper;
 	nanotime_step_init(&stepper, (uint64_t)(NANOTIME_NSEC_PER_SEC / LOGIC_RATE), nanotime_now_max(), nanotime_now, nanotime_sleep);
 	while (!SDL_AtomicGet(&quit_now)) {
 		const uint64_t last_sleep_point = stepper.sleep_point;
 		nanotime_step(&stepper);
-
-		logic_data[0].update_measured = nanotime_interval(last_sleep_point, stepper.sleep_point, nanotime_now_max());
-		logic_data[0].update_sleep_total += logic_data[0].update_measured;
-		logic_data[0].accumulator = stepper.accumulator;
-		logic_data[0].num_updates++;
-
-		if (SDL_TryLockMutex(logic_mutex) == 0) {
-			logic_data[1] = logic_data[0];
-			SDL_UnlockMutex(logic_mutex);
-		}
+		update_logic(last_sleep_point, &stepper);
 	}
 
 	return 0;
 }
+#endif
 
 int main(int argc, char** argv) {
 	if (SDL_Init(SDL_INIT_VIDEO) < 0) {
@@ -131,7 +136,9 @@ int main(int argc, char** argv) {
 		SDL_Quit();
 		return EXIT_FAILURE;
 	}
-	SDL_Thread* const logic_thread = SDL_CreateThread(update_logic, "logic_thread", NULL);
+
+#ifdef MULTITHREADED
+	SDL_Thread* const logic_thread = SDL_CreateThread(update_logic_thread_function, "logic_thread", NULL);
 	if (!logic_thread) {
 		SDL_DestroyMutex(logic_mutex);
 		SDL_DestroyRenderer(renderer);
@@ -139,15 +146,24 @@ int main(int argc, char** argv) {
 		SDL_Quit();
 		return EXIT_FAILURE;
 	}
+#endif
 
 	nanotime_step_data stepper;
+
+#ifdef MULTITHREADED
 	nanotime_step_init(&stepper, (uint64_t)(NANOTIME_NSEC_PER_SEC / FRAME_RATE), nanotime_now_max(), nanotime_now, nanotime_sleep);
+#else
+	nanotime_step_init(&stepper, (uint64_t)(NANOTIME_NSEC_PER_SEC / LOGIC_RATE), nanotime_now_max(), nanotime_now, nanotime_sleep);
+#endif
 
 	// The SDL2 documentation says that for maximally-portable code, video
 	// and events should be handled only in the main thread. Additionally,
 	// stdio should only be used in the main thread, as it's not guaranteed
 	// that using stdio in a non-main thread is safe.
 	while (true) {
+#ifndef MULTITHREADED
+		uint64_t last_sleep_point = stepper.sleep_point;
+#endif
 		int status;
 
 		// This animation code is time-based, so it's independent of
@@ -158,7 +174,9 @@ int main(int argc, char** argv) {
 			SDL_RenderClear(renderer) < 0
 		) {
 			SDL_AtomicSet(&quit_now, 1);
+#ifdef MULTITHREADED
 			SDL_WaitThread(logic_thread, NULL);
+#endif
 			SDL_DestroyMutex(logic_mutex);
 			SDL_DestroyRenderer(renderer);
 			SDL_DestroyWindow(window);
@@ -181,7 +199,9 @@ int main(int argc, char** argv) {
 			}
 			if (SDL_UnlockMutex(logic_mutex) == -1) {
 				SDL_AtomicSet(&quit_now, 1);
+#ifdef MULTITHREADED
 				SDL_WaitThread(logic_thread, NULL);
+#endif
 				SDL_DestroyMutex(logic_mutex);
 				SDL_DestroyRenderer(renderer);
 				SDL_DestroyWindow(window);
@@ -191,7 +211,9 @@ int main(int argc, char** argv) {
 		}
 		else if (status == -1) {
 			SDL_AtomicSet(&quit_now, 1);
+#ifdef MULTITHREADED
 			SDL_WaitThread(logic_thread, NULL);
+#endif
 			SDL_DestroyMutex(logic_mutex);
 			SDL_DestroyRenderer(renderer);
 			SDL_DestroyWindow(window);
@@ -205,6 +227,9 @@ int main(int argc, char** argv) {
 		// player should be given as much time as possible to react to
 		// screen updates.
 		nanotime_step(&stepper);
+#ifndef MULTITHREADED
+		update_logic(last_sleep_point, &stepper);
+#endif
 		SDL_PumpEvents();
 		if ((status = SDL_PeepEvents(NULL, 0, SDL_PEEKEVENT, SDL_QUIT, SDL_QUIT)) > 0) {
 			SDL_AtomicSet(&quit_now, 1);
@@ -212,8 +237,10 @@ int main(int argc, char** argv) {
 		}
 		else if (status < 0) {
 			SDL_AtomicSet(&quit_now, 1);
+#ifdef MULTITHREADED
 			SDL_WaitThread(logic_thread, NULL);
 			SDL_DestroyMutex(logic_mutex);
+#endif
 			SDL_DestroyRenderer(renderer);
 			SDL_DestroyWindow(window);
 			SDL_Quit();
@@ -221,8 +248,10 @@ int main(int argc, char** argv) {
 		}
 	}
 
+#ifdef MULTITHREDED
 	SDL_WaitThread(logic_thread, NULL);
 	SDL_DestroyMutex(logic_mutex);
+#endif
 	SDL_DestroyRenderer(renderer);
 	SDL_DestroyWindow(window);
 	SDL_Quit();

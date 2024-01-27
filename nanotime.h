@@ -173,10 +173,13 @@ typedef struct nanotime_step_data {
 	uint64_t (* now)();
 	void (* sleep)(uint64_t nsec_count);
 
+	// TODO: Figure out how to get the power usage optimization to not mess up timing.
+	#if 0
  	#ifdef __APPLE__
 	uint64_t overhead_numer;
 	uint64_t overhead_denom;
 	uint64_t backoff;
+	#endif
 	#endif
 	uint64_t zero_sleep_duration;
 	uint64_t accumulator;
@@ -608,10 +611,12 @@ void nanotime_step_init(nanotime_step_data* const stepper, const uint64_t sleep_
 	const uint64_t start = now();
 	nanotime_sleep(UINT64_C(0));
 	stepper->zero_sleep_duration = nanotime_interval(start, now(), now_max);
+	#if 0
 	#ifdef __APPLE__
 	stepper->overhead_numer = UINT64_C(1);
 	stepper->overhead_denom = UINT64_C(1);
 	stepper->backoff = UINT64_C(0);
+	#endif
 	#endif
 	stepper->accumulator = UINT64_C(0);
 
@@ -629,6 +634,7 @@ bool nanotime_step(nanotime_step_data* const stepper) {
 		uint64_t current_sleep_duration = total_sleep_duration;
 		const uint64_t shift = UINT64_C(4);
 
+		#if 0
 		#ifdef __APPLE__
 		// Start with a big sleep. This helps reduce CPU/power use vs. many
 		// shorter sleeps. Shorter sleeps are still done below, but this reduces
@@ -684,6 +690,7 @@ bool nanotime_step(nanotime_step_data* const stepper) {
 			goto step_end;
 		}
 		#endif
+		#endif
 
 		// This has the flavor of Zeno's dichotomous paradox of motion, as it
 		// successively divides the time remaining to sleep, but attempts to
@@ -732,8 +739,10 @@ bool nanotime_step(nanotime_step_data* const stepper) {
 			}
 		}
 
+		#if 0
 		#ifdef __APPLE__
 		step_end:
+		#endif
 		#endif
 		{
 			// Finally, do a busyloop to precisely sleep up to the
