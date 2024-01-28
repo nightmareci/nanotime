@@ -97,6 +97,11 @@ static void update_logic(const uint64_t last_sleep_point, nanotime_step_data* co
 
 #ifdef MULTITHREADED
 static int SDLCALL update_logic_thread_function(void* data) {
+#ifdef REALTIME
+	SDL_SetHint(SDL_HINT_THREAD_FORCE_REALTIME_TIME_CRITICAL, "1");
+	SDL_SetThreadPriority(SDL_THREAD_PRIORITY_TIME_CRITICAL);
+#endif
+
 	nanotime_step_data stepper;
 	nanotime_step_init(&stepper, (uint64_t)(NANOTIME_NSEC_PER_SEC / LOGIC_RATE), nanotime_now_max(), nanotime_now, nanotime_sleep);
 	while (!SDL_AtomicGet(&quit_now)) {
@@ -149,6 +154,11 @@ int main(int argc, char** argv) {
 #endif
 
 	nanotime_step_data stepper;
+
+#ifdef REALTIME
+	SDL_SetHint(SDL_HINT_THREAD_FORCE_REALTIME_TIME_CRITICAL, "1");
+	SDL_SetThreadPriority(SDL_THREAD_PRIORITY_TIME_CRITICAL);
+#endif
 
 #ifdef MULTITHREADED
 	nanotime_step_init(&stepper, (uint64_t)(NANOTIME_NSEC_PER_SEC / FRAME_RATE), nanotime_now_max(), nanotime_now, nanotime_sleep);

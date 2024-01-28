@@ -30,7 +30,7 @@ int main() {
 }
 ```
 
-`nanotime_yield` is provided, and causes the thread within which it was called to yield the processor to another process for a time slice, if supported. `NANOTIME_YIELD_NOP` is defined if the current platform doesn't support any means of processor yielding, and is just defined as an empty function-like macro.
+`nanotime_yield` is also provided, and causes the thread within which it was called to yield the processor to another process for a small time slice.
 
 C and C++ programs for testing the timestamp and sleep functions are provided; the C version requires C11, the C++ version requires C++11.
 
@@ -59,9 +59,11 @@ int main() {
 }
 ```
 
-An example C/SDL2 program is provided, `test_nanotime_step`, demonstrating how the timestep feature can be integrated into games; the example C/SDL2 program requires C11. The example program has a CMake option, `MULTITHREADED`, that makes that example program have separate logic and render threads; it's enabled by default.
+An example C/SDL2 program is provided, `test_nanotime_step`, demonstrating how the timestep feature can be integrated into games; the example C/SDL2 program requires C11. The example program has some CMake options:
+* Boolean `MULTITHREADED`, that makes that example program have separate logic and render threads; it's disabled by default.
+* Boolean `REALTIME`, that makes that example program use realtime thread priority for its thread(s), which will only work on Linux; it's disabled by default.
 
-If you want to omit the processor yield function and use alternative timestamp and sleep functions, you can `#define NANOTIME_ONLY_STEP` before including `nanotime.h`; by omitting the timestamp and sleep functions, you can use the timestep feature when the timestamp and sleep functions aren't available on your target platform(s), or if you don't wish to use the included timestamp and sleep functions in lieu of others. The timestep feature doesn't use platform-specific features, so its support matrix is simpler, requiring C99 or higher, C++11 or higher, or Visual Studio 2010 or higher:
+If you want to omit the timestamp, sleep, and yield functions, you can `#define NANOTIME_ONLY_STEP` before including `nanotime.h`; by omitting the timestamp, sleep, and yield functions, you can use the timestep feature when the timestamp, sleep, and yield functions aren't available on your target platform(s), or if you don't wish to use the included timestamp and sleep functions in lieu of others. The timestep feature doesn't use platform-specific features, so its support matrix is simpler, requiring C99 or higher, C++11 or higher, or Visual Studio 2010 or higher:
 ```c
 // SDL3 example
 #define NANOTIME_ONLY_STEP

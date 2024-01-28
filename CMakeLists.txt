@@ -71,6 +71,11 @@ if(MULTITHREADED)
 	target_compile_definitions(test_nanotime_step PRIVATE MULTITHREADED TRUE)
 endif()
 
+option(REALTIME "Make the thread(s) of the test_nanotime_step program use realtime thread priority, where supported. Currently, only Linux is supported.")
+if(REALTIME)
+	target_compile_definitions(test_nanotime_step PRIVATE REALTIME TRUE)
+endif()
+
 if(MINGW)
 	find_package(PkgConfig REQUIRED)
 	pkg_check_modules(SDL2 REQUIRED IMPORTED_TARGET SDL2)
