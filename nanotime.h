@@ -295,7 +295,7 @@ void nanotime_sleep(uint64_t nsec_count) {
 #endif
 #include <Windows.h>
 void nanotime_yield() {
-	YieldProcessor()
+	YieldProcessor();
 }
 #define NANOTIME_YIELD_IMPLEMENTED
 #endif
