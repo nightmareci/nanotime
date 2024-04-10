@@ -498,7 +498,7 @@ void nanotime_sleep(uint64_t nsec_count) {
 #ifdef __SWITCH__
 #include <switch.h>
 uint64_t nanotime_now() {
-	return svcGetSystemTick();
+	return armTicksToNs(armGetSystemTick());
 }
 #define NANOTIME_NOW_IMPLEMENTED
 #endif
