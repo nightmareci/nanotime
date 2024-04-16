@@ -709,6 +709,11 @@ void nanotime_step_init(
 bool nanotime_step(nanotime_step_data* const stepper) {
 	assert(stepper != NULL);
 
+	if (nanotime_interval(stepper->sleep_point, stepper->now(), stepper->now_max) >= stepper->sleep_duration + NANOTIME_NSEC_PER_SEC / UINT64_C(10)) {
+		stepper->accumulator = UINT64_C(0);
+		stepper->sleep_point = stepper->now();
+	}
+
 	bool slept;
 	if (stepper->accumulator < stepper->sleep_duration) {
 		const uint64_t total_sleep_duration = stepper->sleep_duration - stepper->accumulator;
