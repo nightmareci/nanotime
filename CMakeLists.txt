@@ -80,7 +80,7 @@ if(MINGW)
 	find_package(PkgConfig REQUIRED)
 	pkg_check_modules(SDL2 REQUIRED IMPORTED_TARGET SDL2)
 	target_link_libraries(test_nanotime_step
-		PkgConfig::SDL2
+		PRIVATE PkgConfig::SDL2
 	)
 else()
 	find_package(SDL2 REQUIRED)
