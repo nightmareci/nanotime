@@ -65,6 +65,7 @@ set(CMAKE_C_STANDARD_REQUIRED TRUE)
 add_executable(test_nanotime_sleep_cpp test_nanotime_sleep.cpp nanotime.h)
 add_executable(test_nanotime_sleep_c test_nanotime_sleep.c nanotime.h)
 add_executable(test_nanotime_step test_nanotime_step.c nanotime.h)
+add_executable(render_thread_test_nanotime_step render_thread_test_nanotime_step.c nanotime.h)
 
 option(MULTITHREADED "Make the test_nanotime_step program use multithreading.")
 if(MULTITHREADED)
@@ -74,6 +75,7 @@ endif()
 option(REALTIME "Make the thread(s) of the test_nanotime_step program use realtime thread priority, where supported. Currently, only Linux is supported.")
 if(REALTIME)
 	target_compile_definitions(test_nanotime_step PRIVATE REALTIME TRUE)
+	target_compile_definitions(render_thread_test_nanotime_step PRIVATE REALTIME TRUE)
 endif()
 
 if(MINGW)
@@ -82,13 +84,22 @@ if(MINGW)
 	target_link_libraries(test_nanotime_step
 		PRIVATE PkgConfig::SDL2
 	)
+	target_link_libraries(render_thread_test_nanotime_step
+		PRIVATE PkgConfig::SDL2
+	)
 else()
 	find_package(SDL2 REQUIRED)
 	target_link_libraries(test_nanotime_step
 		PRIVATE SDL2::SDL2
 	)
+	target_link_libraries(render_thread_test_nanotime_step
+		PRIVATE SDL2::SDL2
+	)
 	if(TARGET SDL2::SDL2main)
 		target_link_libraries(test_nanotime_step
+			PRIVATE SDL2::SDL2main
+		)
+		target_link_libraries(render_thread_test_nanotime_step
 			PRIVATE SDL2::SDL2main
 		)
 	endif()
@@ -97,6 +108,7 @@ endif()
 find_library(MATH_LIBRARY m)
 if(NOT "${MATH_LIBRARY}" STREQUAL MATH_LIBRARY-NOTFOUND)
 	target_link_libraries(test_nanotime_step PRIVATE "${MATH_LIBRARY}")
+	target_link_libraries(render_thread_test_nanotime_step PRIVATE "${MATH_LIBRARY}")
 endif()
 
 if(UNIX)
