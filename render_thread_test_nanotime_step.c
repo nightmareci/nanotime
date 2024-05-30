@@ -288,6 +288,10 @@ int main(int argc, char** argv) {
 			if (event.type == SDL_QUIT) {
 				goto end;
 			}
+			if (event.type == SDL_KEYDOWN) {
+				sleep_total = 0;
+				num_ticks = 0;
+			}
 		}
 		if (status < 0) {
 			printf("Error while dequeueing events\n");

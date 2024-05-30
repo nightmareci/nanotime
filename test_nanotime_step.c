@@ -68,6 +68,7 @@
 #define FRAME_RATE 120.0
 
 static SDL_atomic_t quit_now;
+static SDL_atomic_t reset_average;
 
 static SDL_mutex* logic_mutex;
 
@@ -86,6 +87,10 @@ struct {
 
 static void update_logic(const uint64_t last_sleep_point, nanotime_step_data* const stepper) {
 	logic_data[0].update_measured = nanotime_interval(last_sleep_point, stepper->sleep_point, nanotime_now_max());
+	if (SDL_AtomicCAS(&reset_average, 1, 0)) {
+		logic_data[0].update_sleep_total = 0;
+		logic_data[0].num_updates = 0;
+	}
 	logic_data[0].update_sleep_total += logic_data[0].update_measured;
 	logic_data[0].accumulator = stepper->accumulator;
 	logic_data[0].num_updates++;
@@ -135,6 +140,8 @@ int main(int argc, char** argv) {
 	const double two_pi = 8.0 * atan(1.0);
 
 	SDL_AtomicSet(&quit_now, 0);
+	SDL_AtomicSet(&reset_average, 0);
+
 	logic_mutex = SDL_CreateMutex();
 	if (!logic_mutex) {
 		SDL_DestroyRenderer(renderer);
@@ -242,7 +249,17 @@ int main(int argc, char** argv) {
 		update_logic(last_sleep_point, &stepper);
 #endif
 		SDL_PumpEvents();
-		if ((status = SDL_PeepEvents(NULL, 0, SDL_PEEKEVENT, SDL_QUIT, SDL_QUIT)) > 0) {
+		SDL_Event event;
+		bool quit_loop = false;
+		while ((status = SDL_PeepEvents(&event, 1, SDL_GETEVENT, SDL_FIRSTEVENT, SDL_LASTEVENT)) > 0) {
+			if (event.type == SDL_QUIT) {
+				quit_loop = true;
+			}
+			else if (event.type == SDL_KEYDOWN) {
+				SDL_AtomicSet(&reset_average, 1);
+			}
+		}
+		if (quit_loop) {
 			SDL_AtomicSet(&quit_now, 1);
 			break;
 		}
