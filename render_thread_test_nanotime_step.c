@@ -52,9 +52,9 @@
  * IN THE SOFTWARE.
  */
 
-// It seems this setup scheme of creating a render thread works as expected at
-// least for the OpenGL backend on ARM64/x86_64 Linux and x64 Windows. TODO:
-// Test on more platforms, then add the tested platforms here.
+// It seems this scheme of creating a render thread works as expected at least
+// for the OpenGL backend on ARM64/x86_64 Linux, x64 Windows, and Apple Silicon
+// macOS. TODO: Test on more platforms, then add the tested platforms here.
 //
 // The initial setup does as much as possible to ensure an OpenGL render driver
 // is used, of course. And the initial setup fails gracefully if no OpenGL
