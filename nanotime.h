@@ -709,9 +709,11 @@ void nanotime_step_init(
 bool nanotime_step(nanotime_step_data* const stepper) {
 	assert(stepper != NULL);
 
-	if (nanotime_interval(stepper->sleep_point, stepper->now(), stepper->now_max) >= stepper->sleep_duration + NANOTIME_NSEC_PER_SEC / UINT64_C(10)) {
+	const uint64_t start_point = stepper->now();
+
+	if (nanotime_interval(stepper->sleep_point, start_point, stepper->now_max) >= stepper->sleep_duration + NANOTIME_NSEC_PER_SEC / UINT64_C(10)) {
+		stepper->sleep_point = start_point;
 		stepper->accumulator = UINT64_C(0);
-		stepper->sleep_point = stepper->now();
 	}
 
 	bool slept;
@@ -720,7 +722,7 @@ bool nanotime_step(nanotime_step_data* const stepper) {
 		uint64_t current_sleep_duration = total_sleep_duration;
 		const uint64_t shift = UINT64_C(4);
 
-		#if 0
+		#if 1
 		#ifdef __APPLE__
 		/*
 		 * Start with a big sleep. This helps reduce CPU/power use vs.
@@ -782,6 +784,28 @@ bool nanotime_step(nanotime_step_data* const stepper) {
 			}
 			goto step_end;
 		}
+		// TODO: Test this on more platforms. If this initial sleep setup works
+		// fine on a variety of platforms, change to always using it for all
+		// platforms. And, if it works fine on macOS, remove the above initial
+		// sleep code.
+		#elif defined(_WIN32)
+		/*
+		 * A big initial sleep lowers power usage on any platform, as more
+		 * small sleep requests use more power than one bigger, equivalent
+		 * sleep request. But we only want to do a big initial sleep if the
+		 * target step sleep duration is "big enough"; in practice, 4ms is a
+		 * good choice for the minimum "big enough" duration.
+		 */
+		const uint64_t min_initial = NANOTIME_NSEC_PER_SEC / UINT64_C(250);
+		if (current_sleep_duration > min_initial) {
+			stepper->sleep(current_sleep_duration - min_initial);
+			const uint64_t initial_end_point = stepper->now();
+			const uint64_t initial_duration = nanotime_interval(start_point, initial_end_point, stepper->now_max);
+			if (initial_duration >= current_sleep_duration) {
+				goto step_end;
+			}
+			current_sleep_duration -= initial_duration;
+		}
 		#endif
 		#endif
 
@@ -839,11 +863,7 @@ bool nanotime_step(nanotime_step_data* const stepper) {
 			}
 		}
 
-		#if 0
-		#ifdef __APPLE__
 		step_end:
-		#endif
-		#endif
 		{
 			/*
 			 * Finally, do a busyloop to precisely sleep up to the
