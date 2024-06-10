@@ -722,7 +722,7 @@ bool nanotime_step(nanotime_step_data* const stepper) {
 		uint64_t current_sleep_duration = total_sleep_duration;
 		const uint64_t shift = UINT64_C(4);
 
-		#if 1
+		#if 0
 		#ifdef __APPLE__
 		/*
 		 * Start with a big sleep. This helps reduce CPU/power use vs.
@@ -784,11 +784,14 @@ bool nanotime_step(nanotime_step_data* const stepper) {
 			}
 			goto step_end;
 		}
+		#endif
+		#endif
+
 		// TODO: Test this on more platforms. If this initial sleep setup works
 		// fine on a variety of platforms, change to always using it for all
 		// platforms. And, if it works fine on macOS, remove the above initial
 		// sleep code.
-		#elif defined(_WIN32)
+		#if defined(_WIN32) || defined(__linux__)
 		/*
 		 * A big initial sleep lowers power usage on any platform, as more
 		 * small sleep requests use more power than one bigger, equivalent
@@ -806,7 +809,6 @@ bool nanotime_step(nanotime_step_data* const stepper) {
 			}
 			current_sleep_duration -= initial_duration;
 		}
-		#endif
 		#endif
 
 		/*
