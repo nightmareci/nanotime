@@ -54,25 +54,48 @@ cmake_minimum_required(VERSION 3.6)
 
 project(test_nanotime LANGUAGES C CXX)
 
-# TODO: Make C++ and C standards settable with CMake options.
-
-set(CMAKE_CXX_STANDARD 11)
-set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
-
-set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD 11 CACHE STRING "The C language standard to use. C11 (\"11\") is the default.")
 set(CMAKE_C_STANDARD_REQUIRED TRUE)
 
-add_executable(test_nanotime_sleep_cpp test_nanotime_sleep.cpp nanotime.h)
-add_executable(test_nanotime_sleep_c test_nanotime_sleep.c nanotime.h)
-add_executable(test_nanotime_step test_nanotime_step.c nanotime.h)
-add_executable(render_thread_test_nanotime_step render_thread_test_nanotime_step.c nanotime.h)
+set(CMAKE_CXX_STANDARD 11 CACHE STRING "The C++ language standard to use. C++11 (\"11\") is the default.")
+set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
+
+if(UNIX OR APPLE OR MINGW)
+	add_compile_definitions(_POSIX_VERSION=200112L)
+endif()
+
+set(C_EXECUTABLES
+	test_nanotime_sleep_c
+	test_nanotime_step
+	render_thread_test_nanotime_step
+)
+
+set(CPP_EXECUTABLES
+	test_nanotime_sleep_cpp
+)
+
+function(add_executables LIST_NAME SRC_EXT)
+	foreach(NAME ${${LIST_NAME}})
+		add_executable("${NAME}" "${NAME}.${SRC_EXT}" "nanotime.h")
+	endforeach()
+endfunction()
+
+add_executables(C_EXECUTABLES "c")
+add_executables(CPP_EXECUTABLES "cpp")
+
+if(UNIX OR APPLE OR MINGW)
+	include(GNUInstallDirs)
+	install(TARGETS ${C_EXECUTABLES} ${CPP_EXECUTABLES} DESTINATION "${CMAKE_INSTALL_BINDIR}")
+else()
+	install(TARGETS ${C_EXECUTABLES} ${CPP_EXECUTABLES} DESTINATION ".")
+endif()
 
 option(MULTITHREADED "Make the test_nanotime_step program use multithreading.")
 if(MULTITHREADED)
 	target_compile_definitions(test_nanotime_step PRIVATE MULTITHREADED TRUE)
 endif()
 
-option(REALTIME "Make the thread(s) of the test_nanotime_step program use realtime thread priority, where supported. Currently, only Linux is supported.")
+option(REALTIME "Make the thread(s) of the test_nanotime_step and render_thread_test_nanotime_step programs use realtime thread priority, where supported. Currently, only Linux is supported.")
 if(REALTIME)
 	target_compile_definitions(test_nanotime_step PRIVATE REALTIME TRUE)
 	target_compile_definitions(render_thread_test_nanotime_step PRIVATE REALTIME TRUE)
@@ -109,8 +132,4 @@ find_library(MATH_LIBRARY m)
 if(NOT "${MATH_LIBRARY}" STREQUAL MATH_LIBRARY-NOTFOUND)
 	target_link_libraries(test_nanotime_step PRIVATE "${MATH_LIBRARY}")
 	target_link_libraries(render_thread_test_nanotime_step PRIVATE "${MATH_LIBRARY}")
-endif()
-
-if(UNIX)
-	add_compile_definitions(_POSIX_VERSION=200112L)
 endif()

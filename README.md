@@ -39,7 +39,7 @@ When using the included processor yield (`nanotime_yield`), timestamp (`nanotime
 * Using C++11 or higher will always be supported.
 * Using C versions other than C11 or higher without threading support is somewhat supported, as they require platform-specific features to be supported. Some common platforms are currently supported (Windows, macOS, Linux, perhaps other POSIX/UNIX platforms). For Windows/MSVC support, Visual Studio 2010 or higher is required, with the other supported platforms requiring C99 or higher.
 
-An implementation of the [fixed timestep](https://www.gafferongames.com/post/fix_your_timestep/) algorithm is provided, using a performance-optimized [accurate sleep](https://blog.bearcats.nl/accurate-sleep-function/) algorithm I've developed myself, to make it very easy to get precisely timed updates/frames in games:
+An implementation of the [fixed timestep](https://www.gafferongames.com/post/fix_your_timestep/) algorithm is provided, using a performance and power usage optimized [accurate sleep](https://blog.bearcats.nl/accurate-sleep-function/) algorithm I've developed myself, to make it very easy to get precisely timed updates/frames in games:
 ```c
 #define NANOTIME_IMPLEMENTATION
 #include "nanotime.h"
@@ -59,9 +59,9 @@ int main() {
 }
 ```
 
-An example C/SDL2 program is provided, `test_nanotime_step`, demonstrating how the timestep feature can be integrated into games; the example C/SDL2 program requires C11. The example program has some CMake options:
-* Boolean `MULTITHREADED`, that makes that example program have separate logic and render threads; it's disabled by default.
-* Boolean `REALTIME`, that makes that example program use realtime thread priority for its thread(s), which will only work on Linux; it's disabled by default.
+Example C/SDL2 programs are provided, `test_nanotime_step` and `render_thread_test_nanotime_step`, demonstrating how the timestep feature can be integrated into games; the example C/SDL2 programs require C11. The example programs have some CMake options:
+* Boolean `MULTITHREADED`, that makes `test_nanotime_step` have separate logic and render threads; it's disabled by default.
+* Boolean `REALTIME`, that makes both programs' thread priority realtime for their thread(s), which will only work on Linux; it's disabled by default.
 
 If you want to omit the timestamp, sleep, and yield functions, you can `#define NANOTIME_ONLY_STEP` before including `nanotime.h`; by omitting the timestamp, sleep, and yield functions, you can use the timestep feature when the timestamp, sleep, and yield functions aren't available on your target platform(s), or if you don't wish to use the included timestamp and sleep functions in lieu of others. The timestep feature doesn't use platform-specific features, so its support matrix is simpler, requiring C99 or higher, C++11 or higher, or Visual Studio 2010 or higher:
 ```c
@@ -69,7 +69,7 @@ If you want to omit the timestamp, sleep, and yield functions, you can `#define 
 #define NANOTIME_ONLY_STEP
 #define NANOTIME_IMPLEMENTATION
 #include "nanotime.h"
-#include "SDL.h"
+#include <SDL3/SDL.h>
 // ...
     nanotime_step_data stepper;
     // SDL3 errors out if the time values overflow, so using UINT64_MAX for the

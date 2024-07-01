@@ -214,7 +214,7 @@ int main(int argc, char** argv) {
 	SDL_MemoryBarrierRelease();
 	SDL_AtomicSet(&ticks, 0);
 
-	window = SDL_CreateWindow("Fixed timestep test", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 640, 480, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL);
+	window = SDL_CreateWindow("render_thread_test_nanotime_step", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 640, 480, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL);
 	if (!window) {
 		printf("SDL_CreateWindow failed\n");
 		SDL_Quit();

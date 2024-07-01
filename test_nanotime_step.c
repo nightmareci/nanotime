@@ -125,7 +125,7 @@ int main(int argc, char** argv) {
 		return EXIT_FAILURE;
 	}
 
-	SDL_Window* const window = SDL_CreateWindow("Fixed timestep test", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 640, 480, SDL_WINDOW_SHOWN);
+	SDL_Window* const window = SDL_CreateWindow("test_nanotime_step", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 640, 480, SDL_WINDOW_SHOWN);
 	if (!window) {
 		SDL_Quit();
 		return EXIT_FAILURE;
