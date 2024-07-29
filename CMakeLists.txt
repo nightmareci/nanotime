@@ -54,8 +54,12 @@ cmake_minimum_required(VERSION 3.6)
 
 project(test_nanotime LANGUAGES C CXX)
 
-set(CMAKE_C_STANDARD 11 CACHE STRING "The C language standard to use. C11 (\"11\") is the default.")
+set(CMAKE_C_STANDARD 99 CACHE STRING "The C language standard to use. C99 (\"99\") is the default.")
 set(CMAKE_C_STANDARD_REQUIRED TRUE)
+
+if(CMAKE_C_STANDARD STREQUAL 90)
+	message(FATAL_ERROR "The C language standard used must be C99 (\"99\") or higher; C89/C90 (\"90\") is not supported.")
+endif()
 
 set(CMAKE_CXX_STANDARD 11 CACHE STRING "The C++ language standard to use. C++11 (\"11\") is the default.")
 set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
@@ -88,6 +92,12 @@ if(UNIX OR APPLE OR MINGW)
 	install(TARGETS ${C_EXECUTABLES} ${CPP_EXECUTABLES} DESTINATION "${CMAKE_INSTALL_BINDIR}")
 else()
 	install(TARGETS ${C_EXECUTABLES} ${CPP_EXECUTABLES} DESTINATION ".")
+endif()
+
+option(SHOW_LOG "Show a log of live timing information. On by default." ON)
+if(SHOW_LOG)
+	target_compile_definitions(test_nanotime_step PRIVATE SHOW_LOG TRUE)
+	target_compile_definitions(render_thread_test_nanotime_step PRIVATE SHOW_LOG TRUE)
 endif()
 
 option(MULTITHREADED "Make the test_nanotime_step program use multithreading.")

@@ -52,12 +52,10 @@
  * IN THE SOFTWARE.
  */
 
-#include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <inttypes.h>
 #include <stdbool.h>
-#include <math.h>
 
 #define NANOTIME_IMPLEMENTATION
 #include "nanotime.h"
@@ -137,8 +135,6 @@ int main(int argc, char** argv) {
 		return EXIT_FAILURE;
 	}
 
-	const double two_pi = 8.0 * atan(1.0);
-
 	SDL_AtomicSet(&quit_now, 0);
 	SDL_AtomicSet(&reset_average, 0);
 
@@ -186,7 +182,9 @@ int main(int argc, char** argv) {
 
 		// This animation code is time-based, so it's independent of
 		// the frame rate.
-		const Uint8 shade = (Uint8)(((sin(two_pi * ((double)(nanotime_now() % NANOTIME_NSEC_PER_SEC) / NANOTIME_NSEC_PER_SEC)) + 1.0) / 2.0) * 255.0);
+		//
+		// SDL2's SDL_stdinc.h header ensures M_PI is always defined.
+		const Uint8 shade = (Uint8)(((SDL_sin(2.0 * M_PI * ((double)(nanotime_now() % NANOTIME_NSEC_PER_SEC) / NANOTIME_NSEC_PER_SEC)) + 1.0) / 2.0) * 255.0);
 		if (
 			SDL_SetRenderDrawColor(renderer, shade, shade, shade, SDL_ALPHA_OPAQUE) < 0 ||
 			SDL_RenderClear(renderer) < 0
@@ -207,13 +205,14 @@ int main(int argc, char** argv) {
 		status = SDL_TryLockMutex(logic_mutex);
 		if (status == 0) {
 			if (logic_data[1].num_updates > UINT64_C(0)) {
-				printf("%" PRIu64 " ns/frame current, %" PRIu64 " ns/frame average, %" PRId64 " ns off, accumulated %" PRIu64 " ns\n",
+#ifdef SHOW_LOG
+				SDL_Log("%" PRIu64 " ns/frame current, %" PRIu64 " ns/frame average, %" PRId64 " ns off, accumulated %" PRIu64 " ns\n",
 					logic_data[1].update_measured,
 					logic_data[1].update_sleep_total / logic_data[1].num_updates,
 					(int64_t)logic_data[1].update_measured - (int64_t)(NANOTIME_NSEC_PER_SEC / LOGIC_RATE),
 					logic_data[1].accumulator
 				);
-				fflush(stdout);
+#endif
 			}
 			if (SDL_UnlockMutex(logic_mutex) == -1) {
 				SDL_AtomicSet(&quit_now, 1);

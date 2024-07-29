@@ -96,20 +96,16 @@
 // render thread to do the window operations, and window state would have to be
 // read in the render thread then communicated to the main thread.
 
-#include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <stdint.h>
 #include <inttypes.h>
 #include <stdbool.h>
-#include <math.h>
 
 #define NANOTIME_IMPLEMENTATION
 #include "nanotime.h"
 #include "SDL.h"
 
 #define TICK_RATE 60.0
-#define TWO_PI (2.0 * M_PI)
 
 static SDL_atomic_t quit_now = { 0 };
 static SDL_atomic_t ticks = { 0 };
@@ -161,7 +157,7 @@ static int SDLCALL render(void* data) {
 		const int current_ticks = SDL_AtomicGet(&ticks);
 		SDL_MemoryBarrierAcquire();
 
-		const Uint8 shade = (Uint8)(((sin(TWO_PI * (current_ticks / TICK_RATE)) + 1.0) / 2.0) * 255.0);
+		const Uint8 shade = (Uint8)(((SDL_sin(2.0 * M_PI * (current_ticks / TICK_RATE)) + 1.0) / 2.0) * 255.0);
 		if (
 			SDL_SetRenderDrawColor(renderer, shade, shade, shade, SDL_ALPHA_OPAQUE) < 0 ||
 			SDL_RenderClear(renderer) < 0
@@ -180,13 +176,13 @@ static int SDLCALL render(void* data) {
 
 int main(int argc, char** argv) {
 	if (SDL_Init(SDL_INIT_EVENTS | SDL_INIT_VIDEO) < 0) {
-		printf("SDL_Init failed\n");
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL_Init failed\n");
 		return EXIT_FAILURE;
 	}
 
 	const int num_render_drivers = SDL_GetNumRenderDrivers();
 	if (num_render_drivers < 0) {
-		printf("Failed to get number of render drivers\n");
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to get number of render drivers\n");
 		SDL_Quit();
 		return EXIT_FAILURE;
 	}
@@ -195,16 +191,16 @@ int main(int argc, char** argv) {
 	for (render_driver = 0; render_driver < num_render_drivers; render_driver++) {
 		SDL_RendererInfo info;
 		if (SDL_GetRenderDriverInfo(render_driver, &info) < 0) {
-			printf("Failed to get render driver info for index %d\n", render_driver);
+			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to get render driver info for index %d\n", render_driver);
 			SDL_Quit();
 			return EXIT_FAILURE;
 		}
-		if (!strncmp(info.name, "opengl", 6)) {
+		if (!SDL_strncmp(info.name, "opengl", 6)) {
 			break;
 		}
 	}
 	if (render_driver == num_render_drivers) {
-		printf("Failed to find some OpenGL render driver, which is required\n");
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to find some OpenGL render driver, which is required\n");
 		SDL_Quit();
 		return EXIT_FAILURE;
 	}
@@ -216,14 +212,14 @@ int main(int argc, char** argv) {
 
 	window = SDL_CreateWindow("render_thread_test_nanotime_step", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 640, 480, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL);
 	if (!window) {
-		printf("SDL_CreateWindow failed\n");
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL_CreateWindow failed\n");
 		SDL_Quit();
 		return EXIT_FAILURE;
 	}
 
 	renderer = SDL_CreateRenderer(window, render_driver, SDL_RENDERER_ACCELERATED);
 	if (!renderer) {
-		printf("SDL_CreateRenderer failed\n");
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL_CreateRenderer failed\n");
 		SDL_DestroyWindow(window);
 		SDL_Quit();
 		return EXIT_FAILURE;
@@ -231,7 +227,7 @@ int main(int argc, char** argv) {
 
 	context = SDL_GL_GetCurrentContext();
 	if (context == NULL || SDL_GL_MakeCurrent(window, NULL) < 0) {
-		printf("Context release failed, context is %s\n", context == NULL ? "NULL" : "not NULL");
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Context release failed, context is %s\n", context == NULL ? "NULL" : "not NULL");
 		SDL_DestroyRenderer(renderer);
 		SDL_DestroyWindow(window);
 		SDL_Quit();
@@ -240,7 +236,7 @@ int main(int argc, char** argv) {
 
 	render_wake = SDL_CreateSemaphore(0);
 	if (!render_wake) {
-		printf("Failed to create render_wake semaphore\n");
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create render_wake semaphore\n");
 		SDL_DestroyRenderer(renderer);
 		SDL_DestroyWindow(window);
 		SDL_Quit();
@@ -249,14 +245,14 @@ int main(int argc, char** argv) {
 
 	SDL_Thread* const render_thread = SDL_CreateThread(render, "render_thread", NULL);
 	if (!render_thread) {
-		printf("Failed to create the render thread\n");
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create the render thread\n");
 		SDL_DestroySemaphore(render_wake);
 		if (SDL_GL_MakeCurrent(window, context) >= 0) {
 			SDL_DestroyRenderer(renderer);
 			SDL_DestroyWindow(window);
 		}
 		else {
-			printf("Failed to make context current in main thread\n");
+			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to make context current in main thread\n");
 		}
 		SDL_Quit();
 		return EXIT_FAILURE;
@@ -294,7 +290,7 @@ int main(int argc, char** argv) {
 			}
 		}
 		if (status < 0) {
-			printf("Error while dequeueing events\n");
+			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Error while dequeueing events\n");
 			SDL_FlushEvents(SDL_FIRSTEVENT, SDL_LASTEVENT);
 			goto end;
 		}
@@ -309,23 +305,24 @@ int main(int argc, char** argv) {
 		}
 
 		if (SDL_SemPost(render_wake) < 0) {
-			printf("Error waking render thread during main thread ticks\n");
+			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Error waking render thread during main thread ticks\n");
 			abort();
 		}
 
 		nanotime_step(&stepper);
 
+#ifdef SHOW_LOG
 		const uint64_t current_sleep = nanotime_interval(last_point, stepper.sleep_point, stepper.now_max);
 		sleep_total += current_sleep;
 		num_ticks++;
-		printf("%" PRIu64 " ns/tick current, %" PRIu64 " ns/tick average, %" PRId64 " ns off, accumulated %" PRIu64 " ns\n",
+		SDL_Log("%" PRIu64 " ns/tick current, %" PRIu64 " ns/tick average, %" PRId64 " ns off, accumulated %" PRIu64 " ns\n",
 			current_sleep,
 			sleep_total / num_ticks,
 			(int64_t)(current_sleep - stepper.sleep_duration),
 			stepper.accumulator
 		);
-		fflush(stdout);
 		last_point = stepper.sleep_point;
+#endif
 	}
 
 end:
@@ -333,33 +330,33 @@ end:
 	SDL_AtomicSet(&quit_now, 1);
 
 	if (SDL_SemPost(render_wake) < 0) {
-		printf("Error waking render thread at quit\n");
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Error waking render thread at quit\n");
 		abort();
 	}
 	SDL_WaitThread(render_thread, &status);
 	switch (status) {
 	default:
 		if (status != 0) {
-			printf("Invalid status value returned from render thread of %d\n", status);
+			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Invalid status value returned from render thread of %d\n", status);
 			abort();
 		}
 		break;
 
 	case -1:
-		printf("Error making context current in render thread\n");
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Error making context current in render thread\n");
 		break;
 
 	case -2:
-		printf("Error waiting on semaphore in render thread\n");
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Error waiting on semaphore in render thread\n");
 		abort();
 
 	case -3:
-		printf("Error rendering in render thread\n");
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Error rendering in render thread\n");
 		break;
 	}
 
 	if (SDL_GL_MakeCurrent(window, context) < 0) {
-		printf("Error making context current at quit\n");
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Error making context current at quit\n");
 		abort();
 	}
 	SDL_DestroySemaphore(render_wake);
